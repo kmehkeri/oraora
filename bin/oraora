@@ -1,0 +1,8 @@
+#!/usr/bin/env ruby
+
+require 'oraora'
+
+credentials = ARGV[0]
+role = ARGV[2] if ARGV[1] == 'as'
+
+Oraora::App.main credentials, role
