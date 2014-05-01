@@ -1,20 +1,26 @@
 module Oraora
-  # Helper module wrapping OCI methods for querying metadata
-  module Meta
-    def Meta.validate_schema(schema)
+  # Helper class wrapping OCI methods for querying metadata
+  class Meta
+    class NotExists < StandardError; end
+
+    def initialize(oci)
+      @oci = oci
+    end
+
+    def validate_schema(schema)
+      raise NotExists unless @oci.select_one('SELECT max(1) FROM all_users WHERE username = :username', schema)[0] == 1
       true
     end
 
-    def Meta.object_type(schema, object)
-      :table
+    def object_type(schema, object)
+      type = @oci.select_one("SELECT max(object_type) FROM all_objects WHERE owner = :schema AND object_name = :object AND object_type NOT IN ('PACKAGE BODY')", schema, object)[0]
+      raise NotExists if !type
+      type.downcase.gsub(' ', '_').to_sym
     end
 
-    def Meta.validate_column(schema, relation, column)
+    def validate_column(schema, relation, column)
+      raise NotExists unless @oci.select_one('SELECT max(1) FROM all_tab_columns WHERE owner = :schema AND table_name = :relation AND column_name = :col', schema, relation, column)[0] == 1
       true
-    end
-
-    def Meta.program_type(schema, package, program)
-      :procedure
     end
   end
 end

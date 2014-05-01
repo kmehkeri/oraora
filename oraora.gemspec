@@ -1,8 +1,8 @@
 Gem::Specification.new do |s|
   s.name        = 'oraora'
   s.version     = '0.0.0'
-  s.summary     = "oraora!"
-  s.description = "oraora"
+  s.summary     = "Interactive command-line utility for Oracle"
+  s.description = "Interactive command-line utility for Oracle"
 
   s.author      = "kmehkeri"
   s.email       = 'kmehkeri@gmail.com'

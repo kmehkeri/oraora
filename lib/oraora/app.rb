@@ -15,7 +15,18 @@ module Oraora
       # Connect to Oracle with given credentials
       puts "[DEBUG] Connecting: #{credentials}" + (role ? " as #{role}" : '')
       @user, @database, @role = credentials.user.upcase, credentials.database, (role ? role.upcase.to_sym : nil)
-      @oci = OCI8.new(@user, credentials.password, @database, @role)
+
+      # Delegate login to a separate thread as OCI8.new seems to ignore interrupts
+      begin
+        thread = Thread.new { @oci = OCI8.new(@user, credentials.password, @database, @role) }
+        thread.join
+      rescue Interrupt
+        thread.exit
+        raise
+      end
+
+      # Metadata engine
+      @meta = Meta.new(@oci)
 
       # Set default context
       @context = Context.new(user: @user, schema: @user)
@@ -26,7 +37,12 @@ module Oraora
       buffer = ''
       while (line = Readline.readline(@context.prompt).strip) do
         buffer += (buffer == '' ? '' : "\n") + line
-        if (buffer == line && line =~ /^(#{ORAORA_KEYWORDS.join('|')})($|\s+)/) || line == '/' || line =~ /;$/
+        # Process buffer on one of these conditions:
+        # * This is first line of the buffer and is empty
+        # * This is first line of the buffer and is a Oraora command
+        # * Entire buffer is a comment
+        # * Line is '/' or ends with ';'
+        if (buffer == line && (line =~ /^(#{ORAORA_KEYWORDS.join('|')})($|\s+)/ || line =~ /^\s*$/)) || line == '/' || line =~ /;$/ || buffer =~ /\A\s*--/ || buffer =~ /\A\s*\/\*.*\*\/\s*\Z/m
           process(buffer)
           buffer = ''
         end
@@ -36,32 +52,30 @@ module Oraora
       terminate
 
     rescue Interrupt
-      puts "[DEBUG] Exiting on CTRL+C"
+      puts "[INFO] Interrupt"
       terminate
     end
 
     def process(text)
-      puts "[DEBUG] Processing: #{text}"
+      puts "[DEBUG] Processing buffer: #{text}"
       # Determine first non-comment word of a command
-      text =~ /\A(?:\/\*.*?\*\/\s*|--.*?\n)*\s*([^[:space:]\*\(\/;]+)?(.*)?/mi
+      text =~ /\A(?:\/\*.*?\*\/\s*|--.*?(?:\n|\Z))*\s*([^[:space:]\*\(\/;]+)?(.*)?/mi
       case first_word = $1 && $1.downcase
         # Nothing, gibberish or just comments
         when nil
-          if $2
-            puts "[DEBUG] Gibberish!"
+          if $2 && $2 != ''
+            puts "[ERROR] Invalid command: #{$2}"
           end
 
         # TODO: Change context
         when 'c', 'cd'
           puts "[DEBUG] Switch context"
           if !$2 || $2.strip == ''
-            puts "[DEBUG] -> home"
             @context.set(schema: @user)
           else
-            saved_context = @context
+            saved_context = @context.dup
             begin
               path = $2.strip.split(/\s+/)[0].split(/[\.\/]/)
-              puts "[DEBUG] -> #{path.inspect}"
               level = path[0] == "" ? :root : @context.level
               path.each_with_index do |node, i|
                 case
@@ -72,28 +86,26 @@ module Oraora
                   when node == '---' then @context.up.up.up
                   else
                     raise Context::InvalidKey if node !~ /^[a-zA-Z0-9_\$]{,30}$/
-                    puts "[DEBUG] Traversing: #{node}"
                     case @context.level
-                      when nil then Meta.validate_schema(node) && @context.traverse(schema: node)
-                      when :schema then (object_type = Meta.object_type(@context.schema, node)) && @context.traverse(object_type => node)
-                      when :table, :view, :mview then Meta.validate_column(@context.schema, @context.relation, node) && @context.traverse(column: node)
-                      when :package then (object_type = Meta.program_type(@context.schema, @context.package, node)) && @context.traverse(object_type => node)
+                      when nil then @meta.validate_schema(node) && @context.traverse(schema: node)
+                      when :schema then (object_type = @meta.object_type(@context.schema, node)) && @context.traverse(object_type => node)
+                      when :table, :view, :mview then @meta.validate_column(@context.schema, @context.relation, node) && @context.traverse(column: node)
                       else raise Context::InvalidKey
                     end
                 end
               end
-            rescue Context::InvalidKey
-              puts "[DEBUG] Invalid path"
+            rescue Context::InvalidKey, Meta::NotExists
+              puts "[ERROR] Invalid path"
               @context = saved_context
             end
           end
 
         when 'l', 'ls'
-          puts "[DEBUG] List objects"
+          puts "[DEBUG] List for #{@context.level} #{@context.instance_variable_get('@' + @context.level.to_s)}"
           # TODO: Context/filter by argument
           # TODO: Disable terminal size check when not reading from terminal
           terminal_cols = HighLine::SystemExtensions.terminal_size[0]
-          objects = @oci.describe_schema(@context[:schema]).objects.reject { |o| o =~ /\$/ }.collect(&:obj_name).sort
+          objects = @oci.describe_schema(@context.schema).objects.reject { |o| o =~ /\$/ }.collect(&:obj_name).sort
           object_cols = terminal_cols / 32
           # TODO: Determine optimal object_cols
           num_rows = (objects.length + object_cols - 1) / object_cols
@@ -120,8 +132,9 @@ module Oraora
         # SQL
         when *SQL_KEYWORDS
           puts "[DEBUG] Executing SQL"
+          puts "[DEBUG] #{text.gsub(/[;\/]\Z/, '')}"
           begin
-            cursor = @oci.exec(text.gsub(/[;\/]$/, ''))
+            cursor = @oci.exec(text.gsub(/[;\/]\Z/, ''))
             if first_word == 'select'
               while record = cursor.fetch do
                 puts record.join(', ')
@@ -141,15 +154,19 @@ module Oraora
 
         # Unknown
         else
-          puts "[ERROR] Unknown command: #{$1}"
+          puts "[ERROR] Invalid command: #{$1}"
       end
     end
 
     # Log off the server. 
     def terminate
       puts "[DEBUG] Logging off"
-      @oci.logoff
+      thread = Thread.new { @oci.logoff if @oci }
+      thread.join
       exit
+    rescue Interrupt
+      puts "[DEBUG] Interrupt on logoff, force exit"
+      exit!
     end
   end
 end

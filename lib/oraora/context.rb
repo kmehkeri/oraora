@@ -9,7 +9,7 @@ module Oraora
       view:      [:column],
       mview:     [:column],
       column:    [],
-      package:   [:procedure, :function],
+      package:   [],
       procedure: [],
       function:  []
     }
@@ -21,6 +21,10 @@ module Oraora
       set(hash)
     end
 
+    def dup
+      self.class.new(key_hash.merge(user: @user))
+    end
+
     def set(hash = {})
       KEYS.each { |key| instance_variable_set("@#{key}", nil) }
       @level = nil
@@ -29,7 +33,6 @@ module Oraora
     end
 
     def traverse(hash)
-      puts "[DEBUG] Traverse: #{hash}"
       while(!hash.empty?) do
         key = HIERARCHY[@level].detect { |k| hash[k] }
         raise InvalidKey if !key
@@ -61,7 +64,7 @@ module Oraora
         p += @user == @schema ? '~' : @schema
         level_2 = @table || @view || @mview || @package || @procedure || @function
         p += ".#{level_2}" if level_2
-        level_3 = @column || (@package ? (@procedure || @function) : nil)
+        level_3 = @column
         p += ".#{level_3}" if level_3
       end
       p + ' > '
