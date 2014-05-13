@@ -82,14 +82,14 @@ describe Oraora::Context do
   describe '#prompt' do
     it "should display correct prompt for context" do
       {
-        {}                                                              => ' > ',
-        { user: 'R', schema: 'Q' }                                      => 'Q > ',
-        { user: 'Q', schema: 'Q' }                                      => '~ > ',
-        { user: 'C', schema: 'A', table: 'B' }                          => 'A.B > ',
-        { user: 'A', schema: 'A', package: 'B' }                        => '~.B > ',
-        { user: 'X', schema: 'X', view: 'Y', column: 'Z' }              => '~.Y.Z > ',
-        { user: 'M', schema: 'MMM', table: 'NNN', column: 'TEST' }      => 'MMM.NNN.TEST > ',
-        { user: 'W', schema: 'W', procedure: 'V' }                      => '~.V > '
+        {}                                                              => '',
+        { user: 'R', schema: 'Q' }                                      => 'Q',
+        { user: 'Q', schema: 'Q' }                                      => '~',
+        { user: 'C', schema: 'A', table: 'B' }                          => 'A.B',
+        { user: 'A', schema: 'A', package: 'B' }                        => '~.B',
+        { user: 'X', schema: 'X', view: 'Y', column: 'Z' }              => '~.Y.Z',
+        { user: 'M', schema: 'MMM', table: 'NNN', column: 'TEST' }      => 'MMM.NNN.TEST',
+        { user: 'W', schema: 'W', procedure: 'V' }                      => '~.V'
       }.each do |hash, prompt|
         expect( Oraora::Context.new(hash).prompt ).to eql prompt
       end

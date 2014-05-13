@@ -67,7 +67,7 @@ module Oraora
         level_3 = @column
         p += ".#{level_3}" if level_3
       end
-      p + ' > '
+      p
     end
 
     private

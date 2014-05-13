@@ -13,20 +13,26 @@ module Oraora
 
     def self.read_passfile(filename)
       @@vault = []
-      File.open("passfile", "r") do |infile|
+      ok = true
+      File.open(filename, "r") do |infile|
         while (line = infile.gets)
-          @@vault << parse(line.chomp)
+          begin
+            @@vault << parse(line.chomp)
+          rescue ParseError
+            ok = false
+          end
         end
       end
+      ok
     end
 
     def self.parse(str)
       if str
         match = str.match /^([^\/@]+)?\/?([^\/@]+)?@?([^\/@]+)?$/
-        raise ParseError, "Invalid credentials format (use login/pass@DB)" if !match
+        raise ParseError, "invalid format (use login/pass@DB)" if !match
         user, password, database = match[1..3]
-        raise ParseError, "User can only contain alphanumeric characters" if user && !user.match(/^\w+$/)
-        raise ParseError, "Database name can only contain alphanumeric characters" if database && !database.match(/^\w+$/)
+        raise ParseError, "user can only contain alphanumeric characters" if user && !user.match(/^\w+$/)
+        raise ParseError, "database name can only contain alphanumeric characters" if database && !database.match(/^\w+$/)
         return new(user, password, database)
       else
         return new
@@ -35,7 +41,7 @@ module Oraora
 
     def fill_password_from_vault
       entry = @@vault.detect { |e| match?(e) }
-      @password = entry.password if entry
+      @password = entry.password if entry && !@password
       self
     end
 

@@ -1,8 +1,50 @@
 #!/usr/bin/env ruby
 
 require 'oraora'
+require 'optparse'
+require 'logger'
 
-credentials = ARGV[0]
-role = ARGV[2] if ARGV[1] == 'as'
+# Options
+begin
+  options = {}
 
-Oraora::App.main credentials, role
+  OptionParser.new do |opts|
+    opts.banner = "Usage: oraora [options] connection"
+
+    opts.on("-l LEVEL", "--log-level=LEVEL", [:debug, :info, :warn, :error], "Set message verbosity (debug, info, warn, error)") do |l|
+      options[:log_level] = Logger.const_get(l.upcase)
+    end
+
+    opts.on("-h", "--help", "Show this message") { |h| puts opts; exit }
+  end.parse!
+
+rescue OptionParser::ParseError => e
+  puts "Options error: " + e.message
+  exit
+end
+
+# Logger
+logger = Logger.new(STDOUT)
+logger.level = options[:log_level] || Logger::WARN
+logger.formatter = proc { |severity, datetime, progname, msg| "[#{severity}] #{msg}\n" }
+
+# Read passfile
+if File.file?(passfile = ENV['HOME'] + '/.orapass')
+  ok = Oraora::Credentials.read_passfile(passfile)
+  logger.warn "There were invalid entries in orapass file, which were ignored" if !ok
+end
+
+# Command line arguments
+begin
+  credentials = Oraora::Credentials.parse(ARGV[0])
+  credentials.fill_password_from_vault
+  role = ARGV[2] if ARGV[1] == 'as'
+
+rescue Oraora::Credentials::ParseError => e
+  puts "Invalid connection string: " + e.message
+  exit
+end
+
+# Run application
+app = Oraora::App.new(credentials, role, logger)
+app.run

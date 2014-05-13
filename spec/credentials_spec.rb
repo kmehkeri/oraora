@@ -50,19 +50,33 @@ describe Oraora::Credentials do
   end
 
   context "passfile" do
-    before(:each) do
+    context "correct" do
+      before(:each) do
+        passfile = ['foo/boo@DB', 'hoo/hoo@DB', 'woo/hoohoo@XDB'].join("\n")
+        allow(File).to receive(:open).with("passfile", "r").and_yield(StringIO.open(passfile))
+        Oraora::Credentials.read_passfile('passfile')
+      end
+
+      it "should store credentials from passfile in the vault" do
+        vault = ['foo/boo@DB', 'hoo/hoo@DB', 'woo/hoohoo@XDB'].collect { |entry| Oraora::Credentials.parse(entry) }
+        expect( Oraora::Credentials.class_variable_get(:@@vault) ).to eql vault
+      end
+
+      it "should fill the password from the vault for matching entry" do
+        expect( Oraora::Credentials.new('foo', nil, 'DB').fill_password_from_vault.password ).to eql 'boo'
+      end
+    end
+
+    it "should return true if all entries are parsed correctly" do
       passfile = ['foo/boo@DB', 'hoo/hoo@DB', 'woo/hoohoo@XDB'].join("\n")
       allow(File).to receive(:open).with("passfile", "r").and_yield(StringIO.open(passfile))
-      Oraora::Credentials.read_passfile('passfile')
+      expect(Oraora::Credentials.read_passfile('passfile')).to be true
     end
 
-    it "should store credentials from passfile in the vault" do
-      vault = ['foo/boo@DB', 'hoo/hoo@DB', 'woo/hoohoo@XDB'].collect { |entry| Oraora::Credentials.parse(entry) }
-      expect( Oraora::Credentials.class_variable_get(:@@vault) ).to eql vault
-    end
-
-    it "should fill the password from the vault for matching entry" do
-      expect( Oraora::Credentials.new('foo', nil, 'DB').fill_password_from_vault.password ).to eql 'boo'
+    it "should return false if some entries have errors" do
+      passfile = ['foo/boo@DB', 'hoo/hoo@@@@@DB2'].join("\n")
+      allow(File).to receive(:open).with("passfile", "r").and_yield(StringIO.open(passfile))
+      expect(Oraora::Credentials.read_passfile('passfile')).to be false
     end
   end
 end
