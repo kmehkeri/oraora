@@ -47,12 +47,9 @@ module Oraora
     end
 
     # Logon to the server
-    #
-    # Logon is wrapped in a separate thread as OCI8.new seems to ignore interrupts
     def logon(password)
       begin
-        thread = Thread.new { @oci = OCI8.new(@user, password, @database, @role) }
-        thread.join
+        @oci = OCI.new(@user, password, @database, @role)
       rescue Interrupt
         @logger.debug "CTRL+C, aborting logon"
         exit!
@@ -60,12 +57,9 @@ module Oraora
     end
 
     # Log off the server and terminate
-    #
-    # Logoff is wrapped in a separate thread as OCI8.new seems to ignore interrupts
     def terminate
       @logger.debug "Logging off"
-      thread = Thread.new { @oci.logoff if @oci }
-      thread.join
+      @oci.logoff if @oci
       exit
     rescue Interrupt
       @logger.debug "Interrupt on logoff, force exit"
@@ -140,6 +134,8 @@ module Oraora
             end
           rescue OCI8::OCIError => e
             @logger.error "#{e.message} at #{e.parse_error_offset}"
+          rescue Interrupt
+            @logger.warn "Interrupted by user"
           end
 
         # TODO: su
