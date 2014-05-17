@@ -12,6 +12,24 @@ describe Oraora::Context do
     end
   end
 
+  describe '.su' do
+    it "should return a different context object" do
+      context = Oraora::Context.new(user: 'V', schema: 'X', table: 'Y')
+      expect( context.su('Z') ).not_to eql context
+    end
+
+    it "should store specified user" do
+      context = Oraora::Context.new(user: 'V', schema: 'X', table: 'Y').su('Z')
+      expect( context.user ).to eql 'Z'
+    end
+
+    it "should store original context's data" do
+      context = Oraora::Context.new(user: 'V', schema: 'X', table: 'Y').su('Z')
+      expect( context.schema ).to eql 'X'
+      expect( context.table ).to eql 'Y'
+    end
+  end
+
   describe '#set & #traverse' do
     it "should set root context correctly" do
       context = Oraora::Context.new.set({})

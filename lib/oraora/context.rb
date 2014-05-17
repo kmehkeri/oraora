@@ -21,8 +21,8 @@ module Oraora
       set(hash)
     end
 
-    def dup
-      self.class.new(key_hash.merge(user: @user))
+    def su(user)
+      self.class.new(key_hash.merge(user: user))
     end
 
     def set(hash = {})

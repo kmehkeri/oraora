@@ -2,7 +2,7 @@ module Oraora
   class Credentials
     class ParseError < StandardError; end
 
-    attr_reader :user, :password, :database
+    attr_accessor :user, :password, :database
     @@vault = []
 
     def initialize(user = nil, password = nil, database = nil)

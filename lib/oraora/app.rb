@@ -3,66 +3,72 @@ module Oraora
     SQL_KEYWORDS = %w(select insert update delete merge create drop alter purge analyze commit rollback where add set)
     ORAORA_KEYWORDS = %w(c cd l ls d x exit su sudo)
 
-    def initialize(credentials, role, logger)
+    def initialize(credentials, role, logger, context = nil)
       @credentials = credentials
       @user, @database, @role = credentials.user.upcase, credentials.database, (role ? role.upcase.to_sym : nil)
       @logger = logger
+      @context = context || Context.new(user: @user, schema: @user)
     end
 
     # Run the application with given credentials
-    def run
+    def run(command = nil)
       # Connect to Oracle
       @logger.debug "Connecting: #{@credentials}" + (@role ? " as #{@role}" : '')
-      logon(@credentials.password)
-
-      # Metadata engine
-      @meta = Meta.new(@oci)
-
-      # Set default context
-      @context = Context.new(user: @user, schema: @user)
+      logon
 
       # TODO: Add readline completion
 
-      # Main loop
-      buffer = ''
-      while (line = Readline.readline(@context.prompt + (buffer == '' ? ' $ ' : ' % ')).strip) do
-        buffer += (buffer == '' ? '' : "\n") + line
-        # Process buffer on one of these conditions:
-        # * This is first line of the buffer and is empty
-        # * This is first line of the buffer and is a Oraora command
-        # * Entire buffer is a comment
-        # * Line is '/' or ends with ';'
-        if (buffer == line && (line =~ /^(#{ORAORA_KEYWORDS.join('|')})($|\s+)/ || line =~ /^\s*$/)) || line == '/' || line =~ /;$/ || buffer =~ /\A\s*--/ || buffer =~ /\A\s*\/\*.*\*\/\s*\Z/m
-          process(buffer)
-          buffer = ''
+      if command
+        process(command)
+      else
+        # Main loop
+        buffer = ''
+        while (!@terminate && line = Readline.readline(@context.prompt + (buffer == '' ? ' $ ' : ' % '))) do
+          line.strip!
+          Readline::HISTORY << line if line != '' # Manually add to history to avoid empty lines
+          buffer += (buffer == '' ? '' : "\n") + line
+          # Process buffer on one of these conditions:
+          # * This is first line of the buffer and is empty
+          # * This is first line of the buffer and is a Oraora command
+          # * Entire buffer is a comment
+          # * Line is '/' or ends with ';'
+          if (buffer == line && (line =~ /^(#{ORAORA_KEYWORDS.join('|')})($|\s+)/ || line =~ /^\s*$/)) || line == '/' || line =~ /;$/ || buffer =~ /\A\s*--/ || buffer =~ /\A\s*\/\*.*\*\/\s*\Z/m
+            process(buffer)
+            buffer = ''
+          end
         end
       end
 
-      @logger.debug "Exiting on end-of-file"
-      terminate
+      if !@terminate
+        @logger.debug "Exiting on end of input"
+        terminate
+      end
 
     rescue Interrupt
-      @logger.info "Interrupt"
+      @logger.warn "Interrupt"
       terminate
     end
 
     # Logon to the server
-    def logon(password)
+    def logon
       begin
-        @oci = OCI.new(@user, password, @database, @role)
+        @oci = OCI.new(@user, @credentials.password, @database, @role)
+        @meta = Meta.new(@oci)
       rescue Interrupt
-        @logger.debug "CTRL+C, aborting logon"
+        @logger.warn "CTRL+C, aborting logon"
         exit!
       end
     end
 
     # Log off the server and terminate
     def terminate
-      @logger.debug "Logging off"
-      @oci.logoff if @oci
-      exit
+      if @oci
+        @logger.debug "Logging off"
+        @oci.logoff
+      end
+      @terminate = true
     rescue Interrupt
-      @logger.debug "Interrupt on logoff, force exit"
+      @logger.warn "Interrupt on logoff, force exit"
       exit!
     end
 
@@ -70,7 +76,7 @@ module Oraora
     def process(text)
       @logger.debug "Processing buffer: #{text}"
       # Determine first non-comment word of a command
-      text =~ /\A(?:\/\*.*?\*\/\s*|--.*?(?:\n|\Z))*\s*([^[:space:]\*\(\/;]+)?(.*)?/mi
+      text =~ /\A(?:\/\*.*?\*\/\s*|--.*?(?:\n|\Z))*\s*([^[:space:]\*\(\/;]+)?\s*(.*)?/mi
       case first_word = $1 && $1.downcase
         # Nothing, gibberish or just comments
         when nil
@@ -132,19 +138,34 @@ module Oraora
                 puts record.join(', ')
               end
             end
-          rescue OCI8::OCIError => e
+          rescue OCIError => e
             @logger.error "#{e.message} at #{e.parse_error_offset}"
           rescue Interrupt
             @logger.warn "Interrupted by user"
           end
 
-        # TODO: su
         when 'su'
           @logger.debug "Command type: su"
+          su_credentials = Credentials.new('sys', nil, @database).fill_password_from_vault
+          su_credentials.password = ask("SYS password: ") { |q| q.echo = '' } if !su_credentials.password
+
+          begin
+            App.new(su_credentials, :SYSDBA, @logger, @context.su('SYS')).run
+          rescue OCIError => e
+            @logger.error "#{e.message}"
+          end
 
         # TODO: sudo
         when 'sudo'
-          @logger.debug "Command type: sudo"
+          @logger.debug "Command type: sudo (#{$2})"
+          su_credentials = Credentials.new('sys', nil, @database).fill_password_from_vault
+          su_credentials.password = ask("SYS password: ") { |q| q.echo = '' } if !su_credentials.password
+
+          begin
+            App.new(su_credentials, :SYSDBA, @logger, @context.su('SYS')).run($2)
+          rescue OCIError => e
+            @logger.error "#{e.message}"
+          end
 
         # Unknown
         else
