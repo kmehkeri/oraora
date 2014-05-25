@@ -30,6 +30,15 @@ describe Oraora::Context do
     end
   end
 
+  describe '.dup' do
+    it "should return equal context" do
+      context = Oraora::Context.new(user: 'V', schema: 'X', table: 'Y').dup
+      expect( context.user ).to eql 'V'
+      expect( context.schema ).to eql 'X'
+      expect( context.table ).to eql 'Y'
+    end
+  end
+
   describe '#set & #traverse' do
     it "should set root context correctly" do
       context = Oraora::Context.new.set({})

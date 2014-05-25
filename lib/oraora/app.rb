@@ -84,43 +84,62 @@ module Oraora
             @logger.error "Invalid command: #{$2}"
           end
 
-        # TODO: Change context
         when 'c', 'cd'
           @logger.debug "Switch context"
-          if !$2 || $2.strip == ''
-            @context.set(schema: @user)
-          else
-            path = $2.strip.split(/\s+/)[0].split(/[\.\/]/)
-            begin
-              @context = context_for(path)
-            rescue Context::InvalidKey, Meta::NotExists
-              @logger.error "Invalid path"
+          begin
+            if $2 && $2 != ''
+              @context = context_for($2[/^\S+/])
+            else
+              @context.set(schema: @user)
             end
+          rescue Context::InvalidKey, Meta::NotExists
+            @logger.error "Invalid path"
           end
 
         when 'l', 'ls'
-          # TODO: Context/filter by argument
-          @logger.debug "List for #{@context.level} #{@context.instance_variable_get('@' + @context.level.to_s)}"
-          # TODO: Disable terminal size check when not reading from terminal
-          terminal_cols = HighLine::SystemExtensions.terminal_size[0]
-          objects = @oci.describe_schema(@context.schema).objects.reject { |o| o =~ /\$/ }.collect(&:obj_name).sort
-          object_cols = terminal_cols / 32
-          # TODO: Determine optimal object_cols
-          num_rows = (objects.length + object_cols - 1) / object_cols
-          @logger.debug "Determined #{num_rows} rows of #{object_cols} objects for #{objects.count} objects and #{terminal_cols} terminal width"
-          (0...num_rows).each do |row|
-            line = ''
-            (0...object_cols).each do |col|
-              index = num_rows * col + row
-              line += objects[index].ljust(32) if objects[index]
+          @logger.debug "List"
+          begin
+            work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
+            @logger.debug "List for #{work_context.level} #{work_context.instance_variable_get('@' + work_context.level.to_s)}"
+
+            case work_context.level
+              when :schema
+                # TODO: Disable terminal size check when not reading from terminal
+                terminal_cols = [HighLine::SystemExtensions.terminal_size[0], 32].max
+                objects = @oci.describe_schema(work_context.schema).objects.reject { |o| o =~ /\$/ }.collect(&:obj_name).sort
+                object_cols = terminal_cols / 32
+                # TODO: Determine optimal object_cols
+                num_rows = (objects.length + object_cols - 1) / object_cols
+                @logger.debug "Determined #{num_rows} rows of #{object_cols} objects for #{objects.count} objects and #{terminal_cols} terminal width"
+                (0...num_rows).each do |row|
+                  line = ''
+                  (0...object_cols).each do |col|
+                    index = num_rows * col + row
+                    line += objects[index].ljust(32) if objects[index]
+                  end
+                  puts line
+                end
             end
-            puts line
+
+          rescue Context::InvalidKey, Meta::NotExists
+            @logger.error "Invalid path"
           end
 
         # TODO: Describe
         when 'd'
-          @logger.debug "Describe object"
-          puts "Schema: #{@context[:schema]}"
+          @logger.debug "Describe"
+          begin
+            work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
+            @logger.debug "Describe for #{work_context.level || 'database'}"
+
+            case work_context.level
+              when nil
+                puts "Database: #{@meta.database.name}, created at: #{@meta.database.created}"
+            end
+
+          rescue Context::InvalidKey, Meta::NotExists
+            @logger.error "Invalid path"
+          end
 
         # Exit
         when 'x', 'exit'
@@ -146,25 +165,14 @@ module Oraora
 
         when 'su'
           @logger.debug "Command type: su"
-          su_credentials = Credentials.new('sys', nil, @database).fill_password_from_vault
-          su_credentials.password = ask("SYS password: ") { |q| q.echo = '' } if !su_credentials.password
+          su
 
-          begin
-            App.new(su_credentials, :SYSDBA, @logger, @context.su('SYS')).run
-          rescue OCIError => e
-            @logger.error "#{e.message}"
-          end
-
-        # TODO: sudo
         when 'sudo'
           @logger.debug "Command type: sudo (#{$2})"
-          su_credentials = Credentials.new('sys', nil, @database).fill_password_from_vault
-          su_credentials.password = ask("SYS password: ") { |q| q.echo = '' } if !su_credentials.password
-
-          begin
-            App.new(su_credentials, :SYSDBA, @logger, @context.su('SYS')).run($2)
-          rescue OCIError => e
-            @logger.error "#{e.message}"
+          if $2.strip == ''
+            @logger.error "Command required for sudo"
+          else
+            su($2)
           end
 
         # Unknown
@@ -174,27 +182,49 @@ module Oraora
     end
 
     # Returns new context relative to current one, traversing given path
-    def context_for(path)
-      new_context = @context
-      level = path[0] == "" ? :root : new_context.level
-      path.each_with_index do |node, i|
-        case
-          when i.zero? && node == '' then new_context.root
-          when i.zero? && node == '~' then new_context.set(schema: @user)
-          when node == '-' then new_context.up
-          when node == '--' then new_context.up.up
-          when node == '---' then new_context.up.up.up
-          else
-            raise Context::InvalidKey if node !~ /^[a-zA-Z0-9_\$]{,30}$/
-            case new_context.level
-              when nil then @meta.validate_schema(node) && new_context.traverse(schema: node)
-              when :schema then (object_type = @meta.object_type(new_context.schema, node)) && new_context.traverse(object_type => node)
-              when :table, :view, :mview then @meta.validate_column(new_context.schema, new_context.relation, node) && new_context.traverse(column: node)
-              else raise Context::InvalidKey
+    def context_for(path, default = nil)
+      if !path || path == ''
+        new_context = default.dup
+      else
+        new_context = @context.dup
+        nodes = path.split(/[\.\/]/) rescue []
+        if nodes.empty?
+          level = nil
+          new_context.root
+        else
+          level = nodes[0] == "" ? nil : new_context.level
+          nodes.each_with_index do |node, i|
+            case
+              when i.zero? && node == '' then new_context.root
+              when i.zero? && node == '~' then new_context.set(schema: @user)
+              when node == '-' then new_context.up
+              when node == '--' then new_context.up.up
+              when node == '---' then new_context.up.up.up
+              else
+                raise Context::InvalidKey if node !~ /^[a-zA-Z0-9_\$]{,30}$/
+                case new_context.level
+                  when nil then @meta.validate_schema(node) && new_context.traverse(schema: node)
+                  when :schema then (object_type = @meta.object_type(new_context.schema, node)) && new_context.traverse(object_type => node)
+                  when :table, :view, :mview then @meta.validate_column(new_context.schema, new_context.relation, node) && new_context.traverse(column: node)
+                  else raise Context::InvalidKey
+                end
             end
+          end
         end
       end
       new_context
+    end
+
+    # Gets SYS password either from orapass file or user input, then spawns subshell
+    def su(command = nil)
+      su_credentials = Credentials.new('sys', nil, @database).fill_password_from_vault
+      su_credentials.password = ask("SYS password: ") { |q| q.echo = '' } if !su_credentials.password
+
+      begin
+        App.new(su_credentials, :SYSDBA, @logger, @context.su('SYS')).run(command)
+      rescue OCIError => e
+        @logger.error "#{e.message}"
+      end
     end
   end
 end

@@ -25,6 +25,10 @@ module Oraora
       self.class.new(key_hash.merge(user: user))
     end
 
+    def dup
+      su(@user)
+    end
+
     def set(hash = {})
       KEYS.each { |key| instance_variable_set("@#{key}", nil) }
       @level = nil

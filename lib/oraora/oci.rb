@@ -38,5 +38,12 @@ module Oraora
       self.break
       raise
     end
+
+    # Returns a first column of a query as an array
+    def pluck(sql)
+      result = []
+      exec(sql) { |row| result << row.first }
+      result
+    end
   end
 end

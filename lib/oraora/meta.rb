@@ -1,3 +1,5 @@
+require_relative 'meta/database'
+
 module Oraora
   # Helper class wrapping OCI methods for querying metadata
   class Meta
@@ -21,6 +23,10 @@ module Oraora
     def validate_column(schema, relation, column)
       raise NotExists unless @oci.select_one('SELECT max(1) FROM all_tab_columns WHERE owner = :schema AND table_name = :relation AND column_name = :col', schema, relation, column)[0] == 1
       true
+    end
+
+    def database
+      @database ||= Database.new.describe(@oci)
     end
   end
 end
