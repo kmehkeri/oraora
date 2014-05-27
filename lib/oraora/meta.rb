@@ -1,4 +1,5 @@
 require_relative 'meta/database'
+require_relative 'meta/schema'
 
 module Oraora
   # Helper class wrapping OCI methods for querying metadata
@@ -26,7 +27,17 @@ module Oraora
     end
 
     def database
-      @database ||= Database.new.describe(@oci)
+      @database ||= Database.new.refresh(@oci)
+    end
+
+    def find(context, refresh = false)
+      if context.level == nil
+        database
+      elsif context.schema
+        schema = database.schemas[context.schema]
+        schema.refresh(@oci)
+        context.level == :schema ? schema : schema.find(context)
+      end
     end
   end
 end

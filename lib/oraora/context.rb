@@ -58,6 +58,14 @@ module Oraora
       self
     end
 
+    def relation_type
+      case
+        when @table then 'table'
+        when @view then 'view'
+        when @mview then 'materialized view'
+      end
+    end
+
     def relation
       @table || @view || @mview
     end

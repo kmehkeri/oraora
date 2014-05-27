@@ -40,9 +40,9 @@ module Oraora
     end
 
     # Returns a first column of a query as an array
-    def pluck(sql)
+    def pluck(sql, *bindvars)
       result = []
-      exec(sql) { |row| result << row.first }
+      exec(sql, *bindvars) { |row| result << row.first }
       result
     end
   end

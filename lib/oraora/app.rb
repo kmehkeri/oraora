@@ -100,43 +100,18 @@ module Oraora
           @logger.debug "List"
           begin
             work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
-            @logger.debug "List for #{work_context.level} #{work_context.instance_variable_get('@' + work_context.level.to_s)}"
-
-            case work_context.level
-              when :schema
-                # TODO: Disable terminal size check when not reading from terminal
-                terminal_cols = [HighLine::SystemExtensions.terminal_size[0], 32].max
-                objects = @oci.describe_schema(work_context.schema).objects.reject { |o| o =~ /\$/ }.collect(&:obj_name).sort
-                object_cols = terminal_cols / 32
-                # TODO: Determine optimal object_cols
-                num_rows = (objects.length + object_cols - 1) / object_cols
-                @logger.debug "Determined #{num_rows} rows of #{object_cols} objects for #{objects.count} objects and #{terminal_cols} terminal width"
-                (0...num_rows).each do |row|
-                  line = ''
-                  (0...object_cols).each do |col|
-                    index = num_rows * col + row
-                    line += objects[index].ljust(32) if objects[index]
-                  end
-                  puts line
-                end
-            end
-
+            @logger.debug "List for #{work_context.level || 'database'}"
+            @meta.find(work_context).list
           rescue Context::InvalidKey, Meta::NotExists
             @logger.error "Invalid path"
           end
 
-        # TODO: Describe
         when 'd'
           @logger.debug "Describe"
           begin
             work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
             @logger.debug "Describe for #{work_context.level || 'database'}"
-
-            case work_context.level
-              when nil
-                puts "Database: #{@meta.database.name}, created at: #{@meta.database.created}"
-            end
-
+            @meta.find(work_context).describe
           rescue Context::InvalidKey, Meta::NotExists
             @logger.error "Invalid path"
           end
