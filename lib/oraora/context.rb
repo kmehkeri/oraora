@@ -3,26 +3,23 @@ module Oraora
     class InvalidKey < StandardError; end
 
     HIERARCHY = {
-      nil =>     [:schema],
-      schema:    [:table, :view, :mview, :package, :procedure, :function],
-      table:     [:column],
-      view:      [:column],
-      mview:     [:column],
-      column:    [],
-      package:   [],
-      procedure: [],
-      function:  []
+      nil =>       [:schema],
+      schema:      [:object],
+      object:      [:column, :subprogram],
+      column:      [],
+      subprogram:  [],
     }
-    KEYS = HIERARCHY.keys.compact
+    KEYS = HIERARCHY.keys.compact + [:object_type, :subprogram_type]
 
     attr_reader :level, :user, *KEYS
 
-    def initialize(hash = {})
+    def initialize(user = nil, hash = {})
+      @user = user
       set(hash)
     end
 
     def su(user)
-      self.class.new(key_hash.merge(user: user))
+      self.class.new(user, key_hash)
     end
 
     def dup
@@ -32,14 +29,17 @@ module Oraora
     def set(hash = {})
       KEYS.each { |key| instance_variable_set("@#{key}", nil) }
       @level = nil
-      @user = hash.delete(:user) if hash[:user]
       traverse(hash)
     end
 
     def traverse(hash)
       while(!hash.empty?) do
-        key = HIERARCHY[@level].detect { |k| hash[k] }
-        raise InvalidKey if !key
+        key = HIERARCHY[@level].detect { |k| hash[k] } or raise InvalidKey
+        case key
+          when :column then raise InvalidKey unless [:table, :view, :mview].include?(@object_type)
+          when :object then raise InvalidKey unless @object_type = hash.delete(:object_type)
+          when :subprogram then raise InvalidKey unless @object_type == :package && @subprogram_type = hash.delete(:subprogram_type)
+        end
         @level = key
         instance_variable_set("@#{key}", hash.delete(key))
       end
@@ -51,32 +51,23 @@ module Oraora
     end
 
     def up
-      if @level
-        instance_variable_set("@#{level}", nil)
-        set(key_hash)
+      case @level
+        when nil then return self
+        when :subprogram then @subprogram_type = nil
+        when :object then @object_type = nil
       end
+      instance_variable_set("@#{level}", nil)
+      @level = HIERARCHY.invert.detect { |k, v| k.include? @level }.last
       self
-    end
-
-    def relation_type
-      case
-        when @table then 'table'
-        when @view then 'view'
-        when @mview then 'materialized view'
-      end
-    end
-
-    def relation
-      @table || @view || @mview
     end
 
     def prompt
       p = ''
       if @schema
         p += @user == @schema ? '~' : @schema
-        level_2 = @table || @view || @mview || @package || @procedure || @function
+        level_2 = @object
         p += ".#{level_2}" if level_2
-        level_3 = @column
+        level_3 = @column || @subprogram
         p += ".#{level_3}" if level_3
       end
       p

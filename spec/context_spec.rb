@@ -4,38 +4,40 @@ describe Oraora::Context do
 
   describe '.initialize' do
     it "should initialize from hash" do
-      context = Oraora::Context.new(user: 'V', schema: 'X', table: 'Y')
-      expect( context.level ).to eql :table
+      context = Oraora::Context.new('V', schema: 'X', object: 'Y', object_type: :table)
+      expect( context.level ).to eql :object
       expect( context.user ).to eql 'V'
       expect( context.schema ).to eql 'X'
-      expect( context.table ).to eql 'Y'
+      expect( context.object ).to eql 'Y'
+      expect( context.object_type ).to eql :table
     end
   end
 
   describe '.su' do
     it "should return a different context object" do
-      context = Oraora::Context.new(user: 'V', schema: 'X', table: 'Y')
+      context = Oraora::Context.new('V', schema: 'X', object: 'Y', object_type: :table)
       expect( context.su('Z') ).not_to eql context
     end
 
     it "should store specified user" do
-      context = Oraora::Context.new(user: 'V', schema: 'X', table: 'Y').su('Z')
+      context = Oraora::Context.new('V', schema: 'X', object: 'Y', object_type: :table).su('Z')
       expect( context.user ).to eql 'Z'
     end
 
     it "should store original context's data" do
-      context = Oraora::Context.new(user: 'V', schema: 'X', table: 'Y').su('Z')
+      context = Oraora::Context.new('V', schema: 'X', object: 'Y', object_type: :table).su('Z')
       expect( context.schema ).to eql 'X'
-      expect( context.table ).to eql 'Y'
+      expect( context.object ).to eql 'Y'
     end
   end
 
   describe '.dup' do
     it "should return equal context" do
-      context = Oraora::Context.new(user: 'V', schema: 'X', table: 'Y').dup
+      context = Oraora::Context.new('V', schema: 'X', object: 'Y', object_type: :table).dup
       expect( context.user ).to eql 'V'
       expect( context.schema ).to eql 'X'
-      expect( context.table ).to eql 'Y'
+      expect( context.object ).to eql 'Y'
+      expect( context.object_type ).to eql :table
     end
   end
 
@@ -53,22 +55,22 @@ describe Oraora::Context do
     end
 
     it "should set column context correctly" do
-      context = Oraora::Context.new.set(schema: 'A', table: 'B', column: 'C')
+      context = Oraora::Context.new.set(schema: 'A', object: 'B', object_type: :table, column: 'C')
       expect( context.level ).to eql :column
       expect( context.schema ).to eql 'A'
-      expect( context.table ).to eql 'B'
+      expect( context.object ).to eql 'B'
       expect( context.column ).to eql 'C'
     end
 
     it "should set user correctly on the context" do
-      context = Oraora::Context.new.set(user: 'AA', schema: 'A')
+      context = Oraora::Context.new('AA').set(schema: 'A')
       expect( context.level ).to eql :schema
       expect( context.user ).to eql 'AA'
       expect( context.schema ).to eql 'A'
     end
 
     it "should save user when switching context" do
-      context = Oraora::Context.new.set(user: 'AA', schema: 'A')
+      context = Oraora::Context.new('AA').set(schema: 'A')
       context.set(schema: 'B')
       expect( context.level ).to eql :schema
       expect( context.user ).to eql 'AA'
@@ -79,8 +81,12 @@ describe Oraora::Context do
       expect { Oraora::Context.new.set(foo: 'A') }.to raise_exception(Oraora::Context::InvalidKey)
     end
 
+    it "should raise error on missing object_type when object is present" do
+      expect { Oraora::Context.new.set(schema: 'A', object: 'B') }.to raise_exception(Oraora::Context::InvalidKey)
+    end
+
     it "should raise error on invalid combination of keys" do
-      expect { Oraora::Context.new.set(schema: 'A', table: 'B', view: 'C') }.to raise_exception(Oraora::Context::InvalidKey)
+      expect { Oraora::Context.new.set(schema: 'A', column: 'B', subprogram: 'C') }.to raise_exception(Oraora::Context::InvalidKey)
     end
   end
 
@@ -90,18 +96,18 @@ describe Oraora::Context do
       expect( context.level ).to be_nil
     end
 
-    it "should go up from table to schema level" do
-      context = Oraora::Context.new(schema: 'A', table: 'B').up
+    it "should go up from object to schema level" do
+      context = Oraora::Context.new(nil, schema: 'A', object: 'B', object_type: :table).up
       expect( context.level ).to eql :schema
       expect( context.schema ).to eql 'A'
-      expect( context.table ).to be_nil
+      expect( context.object ).to be_nil
     end
 
-    it "should go up from column to view level" do
-      context = Oraora::Context.new(schema: 'X', view: 'Y', column: 'Z').up
-      expect( context.level ).to eql :view
+    it "should go up from column to object level" do
+      context = Oraora::Context.new(nil, schema: 'X', object: 'Y', object_type: :table, column: 'Z').up
+      expect( context.level ).to eql :object
       expect( context.schema ).to eql 'X'
-      expect( context.view ).to be_eql 'Y'
+      expect( context.object ).to be_eql 'Y'
       expect( context.column ).to be_nil
     end
   end
@@ -109,16 +115,15 @@ describe Oraora::Context do
   describe '#prompt' do
     it "should display correct prompt for context" do
       {
-        {}                                                              => '',
-        { user: 'R', schema: 'Q' }                                      => 'Q',
-        { user: 'Q', schema: 'Q' }                                      => '~',
-        { user: 'C', schema: 'A', table: 'B' }                          => 'A.B',
-        { user: 'A', schema: 'A', package: 'B' }                        => '~.B',
-        { user: 'X', schema: 'X', view: 'Y', column: 'Z' }              => '~.Y.Z',
-        { user: 'M', schema: 'MMM', table: 'NNN', column: 'TEST' }      => 'MMM.NNN.TEST',
-        { user: 'W', schema: 'W', procedure: 'V' }                      => '~.V'
+        {}                                                                      => '',
+        { schema: 'Q' }                                                         => 'Q',
+        { schema: 'U' }                                                         => '~',
+        { schema: 'A', object: 'B', object_type: :table }                       => 'A.B',
+        { schema: 'U', object: 'B', object_type: :package }                     => '~.B',
+        { schema: 'U', object: 'Y', object_type: :table, column: 'Z' }          => '~.Y.Z',
+        { schema: 'MMM', object: 'NNN', object_type: :mview, column: 'TEST' }   => 'MMM.NNN.TEST'
       }.each do |hash, prompt|
-        expect( Oraora::Context.new(hash).prompt ).to eql prompt
+        expect( Oraora::Context.new('U', hash).prompt ).to eql prompt
       end
     end
   end

@@ -7,7 +7,7 @@ module Oraora
       @credentials = credentials
       @user, @database, @role = credentials.user.upcase, credentials.database, (role ? role.upcase.to_sym : nil)
       @logger = logger
-      @context = context || Context.new(user: @user, schema: @user)
+      @context = context || Context.new(@user, schema: @user)
     end
 
     # Run the application with given credentials
@@ -92,6 +92,7 @@ module Oraora
             else
               @context.set(schema: @user)
             end
+            @logger.debug "New context is #{@context.send(:key_hash)}"
           rescue Context::InvalidKey, Meta::NotExists
             @logger.error "Invalid path"
           end
@@ -179,8 +180,9 @@ module Oraora
                 raise Context::InvalidKey if node !~ /^[a-zA-Z0-9_\$]{,30}$/
                 case new_context.level
                   when nil then @meta.validate_schema(node) && new_context.traverse(schema: node)
-                  when :schema then (object_type = @meta.object_type(new_context.schema, node)) && new_context.traverse(object_type => node)
-                  when :table, :view, :mview then @meta.validate_column(new_context.schema, new_context.relation, node) && new_context.traverse(column: node)
+                  when :schema then (object_type = @meta.object_type(new_context.schema, node)) && new_context.traverse(object: node, object_type: object_type)
+                  when :object then @meta.validate_column(new_context.schema, new_context.object, node) && new_context.traverse(column: node)
+                  #TODO: Subprograms
                   else raise Context::InvalidKey
                 end
             end
