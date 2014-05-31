@@ -3,12 +3,14 @@ module Oraora
     class Database
       attr_reader :name, :created, :schemas
 
-      def refresh(oci)
-        if !@name
-          @name, @created = oci.select_one("SELECT name, created FROM v$database")
-          @schemas = Hash[ oci.pluck("SELECT username FROM dba_users").collect { |schema| [schema, Schema.new(schema)] } ]
-        end
+      def load_from_oci(oci)
+        @name, @created = oci.select_one("SELECT name, created FROM v$database")
+        @schemas = oci.pluck("SELECT username FROM dba_users")
         self
+      end
+
+      def self.from_oci(oci)
+        new.load_from_oci(oci)
       end
 
       def describe

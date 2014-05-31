@@ -45,5 +45,16 @@ module Oraora
       exec(sql, *bindvars) { |row| result << row.first }
       result
     end
+
+    # Returns a node identified by context
+    def find(context)
+      case context.level
+        when nil then Meta::Database.from_oci(self)
+        when :schema then Meta::Schema.from_oci(self, context.schema)
+        when :object then Meta::Object.from_oci(self, context.schema, context.object)
+        when :column then Meta::Column.from_oci(self, context.schema, context.object, context.column)
+        when :subprogram then Meta::Subprogram.from_oci(self, context.schema, context.object, context.subprogram)
+      end
+    end
   end
 end

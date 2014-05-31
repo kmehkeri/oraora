@@ -102,7 +102,7 @@ module Oraora
           begin
             work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
             @logger.debug "List for #{work_context.level || 'database'}"
-            @meta.find(work_context).list
+            @oci.find(work_context).list
           rescue Context::InvalidKey, Meta::NotExists
             @logger.error "Invalid path"
           end
@@ -112,7 +112,7 @@ module Oraora
           begin
             work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
             @logger.debug "Describe for #{work_context.level || 'database'}"
-            @meta.find(work_context).describe
+            @oci.find(work_context).describe
           rescue Context::InvalidKey, Meta::NotExists
             @logger.error "Invalid path"
           end
