@@ -1,15 +1,14 @@
 module Oraora
   class Meta
     class Schema
-      attr_reader :id, :name, :status, :created
-
       def initialize(name)
         @name = name
       end
 
       def load_from_oci(oci)
         @id, @status, @created = oci.select_one("SELECT user_id, account_status, created FROM dba_users WHERE username = :name", @name)
-        @objects = Hash[ oci.pluck("SELECT object_name FROM dba_objects WHERE owner = :name", @name).collect { |obj| [obj, obj] } ]
+        @id = @id.to_i
+        @objects = oci.pluck("SELECT object_name, object_type FROM dba_objects WHERE owner = :name ORDER BY object_name", @name)
         self
       end
 
@@ -26,8 +25,10 @@ module Oraora
         HERE
       end
 
-      def list
-        Terminal.puts_grid(@objects.keys.sort)
+      def list(filter = nil)
+        objects = @objects.collect(&:first)
+        objects.select! { |o| o =~ /^#{Regexp.escape(filter).gsub('\*', '.*').gsub('\?', '.')}$/ } if filter
+        Terminal.puts_grid(objects)
       end
     end
   end

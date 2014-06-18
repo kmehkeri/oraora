@@ -39,8 +39,15 @@ module Oraora
       raise
     end
 
-    # Returns a first column of a query as an array
+    # Returns the query result as an array of arrays
     def pluck(sql, *bindvars)
+      result = []
+      exec(sql, *bindvars) { |row| result << row }
+      result
+    end
+
+    # Returns first column of a query as an array
+    def pluck_one(sql, *bindvars)
       result = []
       exec(sql, *bindvars) { |row| result << row.first }
       result

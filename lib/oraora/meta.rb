@@ -1,10 +1,8 @@
-require_relative 'meta/database'
-require_relative 'meta/schema'
-
 module Oraora
   # Helper class wrapping OCI methods for querying metadata
   class Meta
     class NotExists < StandardError; end
+    class NotApplicable < StandardError; end
 
     def initialize(oci)
       @oci = oci

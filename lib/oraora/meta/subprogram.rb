@@ -28,7 +28,8 @@ module Oraora
         HERE
       end
 
-      def list
+      def list(filter = nil)
+        raise NotApplicable, "Nothing to list for subprogram"
       end
     end
   end

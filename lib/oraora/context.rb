@@ -62,13 +62,14 @@ module Oraora
     end
 
     def prompt
-      p = ''
       if @schema
-        p += @user == @schema ? '~' : @schema
+        p = @user == @schema ? '~' : @schema
         level_2 = @object
         p += ".#{level_2}" if level_2
         level_3 = @column || @subprogram
         p += ".#{level_3}" if level_3
+      else
+        p = '/'
       end
       p
     end

@@ -1,7 +1,9 @@
 module Oraora
   class App
+    class InvalidCommand < StandardError; end
+
     SQL_KEYWORDS = %w(select insert update delete merge create drop alter purge analyze commit rollback where add set)
-    ORAORA_KEYWORDS = %w(c cd l ls d x exit su sudo)
+    ORAORA_KEYWORDS = %w(c cd l ls d x exit su sudo - -- --- .)
 
     def initialize(credentials, role, logger, context = nil)
       @credentials = credentials
@@ -75,47 +77,45 @@ module Oraora
     # Process the command buffer
     def process(text)
       @logger.debug "Processing buffer: #{text}"
+
+      # shortcuts for '.' and '-'
+      text = 'c ' + text if text =~ /^\s*(\.|\-+)\s*$/
+
       # Determine first non-comment word of a command
       text =~ /\A(?:\/\*.*?\*\/\s*|--.*?(?:\n|\Z))*\s*([^[:space:]\*\(\/;]+)?\s*(.*)?/mi
+
       case first_word = $1 && $1.downcase
         # Nothing, gibberish or just comments
         when nil
           if $2 && $2 != ''
-            @logger.error "Invalid command: #{$2}"
+            raise InvalidCommand, "Invalid command: #{$2}"
           end
 
         when 'c', 'cd'
           @logger.debug "Switch context"
-          begin
-            if $2 && $2 != ''
-              @context = context_for($2[/^\S+/])
-            else
-              @context.set(schema: @user)
-            end
-            @logger.debug "New context is #{@context.send(:key_hash)}"
-          rescue Context::InvalidKey, Meta::NotExists
-            @logger.error "Invalid path"
+          if $2 && $2 != ''
+            @context = context_for($2[/^\S+/])
+          else
+            @context.set(schema: @user)
           end
+          @logger.debug "New context is #{@context.send(:key_hash)}"
 
         when 'l', 'ls'
           @logger.debug "List"
-          begin
-            work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
-            @logger.debug "List for #{work_context.level || 'database'}"
-            @oci.find(work_context).list
-          rescue Context::InvalidKey, Meta::NotExists
-            @logger.error "Invalid path"
-          end
+          path = $2
+          filter = $2[/[^\.\/]*(\*|\?)[^\.\/]*$/]
+          path = path.chomp(filter).chomp('.').chomp('/')
+          filter.upcase! if filter
+          @logger.debug "Path: #{path}, Filter: #{filter}"
+          work_context = path && path != '' ? context_for(path[/^\S+/]) : @context
+          @logger.debug "List for #{work_context.level || 'database'}"
+          @oci.find(work_context).list(filter)
 
         when 'd'
           @logger.debug "Describe"
-          begin
-            work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
-            @logger.debug "Describe for #{work_context.level || 'database'}"
-            @oci.find(work_context).describe
-          rescue Context::InvalidKey, Meta::NotExists
-            @logger.error "Invalid path"
-          end
+          work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
+          @logger.debug "Describe for #{work_context.level || 'database'}"
+          @oci.find(work_context).describe
 
         # Exit
         when 'x', 'exit'
@@ -124,19 +124,12 @@ module Oraora
 
         # SQL
         when *SQL_KEYWORDS
-          @logger.debug "Executing SQL"
-          @logger.debug "#{text.gsub(/[;\/]\Z/, '')}"
-          begin
-            cursor = @oci.exec(text.gsub(/[;\/]\Z/, ''))
-            if first_word == 'select'
-              while record = cursor.fetch do
-                puts record.join(', ')
-              end
+          @logger.debug "SQL: #{text.gsub(/[;\/]\Z/, '')}"
+          cursor = @oci.exec(text.gsub(/[;\/]\Z/, ''))
+          if first_word == 'select'
+            while record = cursor.fetch do
+              puts record.join(', ')
             end
-          rescue OCIError => e
-            @logger.error "#{e.message} at #{e.parse_error_offset}"
-          rescue Interrupt
-            @logger.warn "Interrupted by user"
           end
 
         when 'su'
@@ -145,48 +138,48 @@ module Oraora
 
         when 'sudo'
           @logger.debug "Command type: sudo (#{$2})"
-          if $2.strip == ''
-            @logger.error "Command required for sudo"
-          else
-            su($2)
-          end
+          raise InvalidCommand, "Command required for sudo" if $2.strip == ''
+          su($2)
 
         # Unknown
         else
-          @logger.error "Invalid command: #{$1}"
+          raise InvalidCommand, "Invalid command: #{$1}"
       end
+
+    rescue InvalidCommand, Meta::NotApplicable => e
+      @logger.error e.message
+    rescue Context::InvalidKey, Meta::NotExists => e
+      @logger.error "Invalid path"
+    rescue OCIError => e
+      @logger.error e.parse_error_offset ? "#{e.message} at #{e.parse_error_offset}" : e.message
+    rescue Interrupt
+      @logger.warn "Interrupted by user"
     end
 
     # Returns new context relative to current one, traversing given path
     def context_for(path, default = nil)
-      if !path || path == ''
-        new_context = default.dup
-      else
-        new_context = @context.dup
-        nodes = path.split(/[\.\/]/) rescue []
-        if nodes.empty?
-          level = nil
-          new_context.root
-        else
-          level = nodes[0] == "" ? nil : new_context.level
-          nodes.each_with_index do |node, i|
-            case
-              when i.zero? && node == '' then new_context.root
-              when i.zero? && node == '~' then new_context.set(schema: @user)
-              when node == '-' then new_context.up
-              when node == '--' then new_context.up.up
-              when node == '---' then new_context.up.up.up
-              else
-                raise Context::InvalidKey if node !~ /^[a-zA-Z0-9_\$]{,30}$/
-                case new_context.level
-                  when nil then @meta.validate_schema(node) && new_context.traverse(schema: node)
-                  when :schema then (object_type = @meta.object_type(new_context.schema, node)) && new_context.traverse(object: node, object_type: object_type)
-                  when :object then @meta.validate_column(new_context.schema, new_context.object, node) && new_context.traverse(column: node)
-                  #TODO: Subprograms
-                  else raise Context::InvalidKey
-                end
+      return default.dup if !path || path == ''
+      new_context = @context.dup
+      nodes = path.split(/[\.\/]/).collect(&:upcase) rescue []
+      return new_context.root if nodes.empty?
+      level = nodes[0] == "" ? nil : new_context.level
+
+      nodes.each_with_index do |node, i|
+        case
+          when i.zero? && node == '' then new_context.root
+          when i.zero? && node == '~' then new_context.set(schema: @user)
+          when node == '-' then new_context.up
+          when node == '--' then new_context.up.up
+          when node =~ /^-+$/ then new_context.up.up.up
+          else
+            raise Context::InvalidKey if node !~ /^[a-zA-Z0-9_\$]{,30}$/
+            case new_context.level
+              when nil then @meta.validate_schema(node) && new_context.traverse(schema: node)
+              when :schema then (object_type = @meta.object_type(new_context.schema, node)) && new_context.traverse(object: node, object_type: object_type)
+              when :object then @meta.validate_column(new_context.schema, new_context.object, node) && new_context.traverse(column: node)
+              #TODO: Subprograms
+              else raise Context::InvalidKey
             end
-          end
         end
       end
       new_context
@@ -196,12 +189,7 @@ module Oraora
     def su(command = nil)
       su_credentials = Credentials.new('sys', nil, @database).fill_password_from_vault
       su_credentials.password = ask("SYS password: ") { |q| q.echo = '' } if !su_credentials.password
-
-      begin
-        App.new(su_credentials, :SYSDBA, @logger, @context.su('SYS')).run(command)
-      rescue OCIError => e
-        @logger.error "#{e.message}"
-      end
+      App.new(su_credentials, :SYSDBA, @logger, @context.su('SYS')).run(command)
     end
   end
 end

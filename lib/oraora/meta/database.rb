@@ -1,11 +1,9 @@
 module Oraora
   class Meta
     class Database
-      attr_reader :name, :created, :schemas
-
       def load_from_oci(oci)
         @name, @created = oci.select_one("SELECT name, created FROM v$database")
-        @schemas = oci.pluck("SELECT username FROM dba_users")
+        @schemas = oci.pluck_one("SELECT username FROM dba_users ORDER BY username")
         self
       end
 
@@ -20,8 +18,9 @@ module Oraora
         HERE
       end
 
-      def list
-        Terminal.puts_grid(@schemas.keys.sort)
+      def list(filter = nil)
+        schemas = @schemas.select! { |o| o =~ /^#{Regexp.escape(filter).gsub('\*', '.*').gsub('\?', '.')}$/ } if filter
+        Terminal.puts_grid(schemas || @schemas)
       end
     end
   end

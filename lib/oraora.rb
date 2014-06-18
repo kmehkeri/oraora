@@ -3,9 +3,5 @@ require 'highline'
 require 'highline/import'
 require 'indentation'
 require 'oci8'
-require 'oraora/credentials'
-require 'oraora/context'
-require 'oraora/meta'
-require 'oraora/oci'
-require 'oraora/terminal'
-require 'oraora/app'
+
+Dir[File.dirname(__FILE__) + '/oraora/**/*.rb'].each { |file| require file }
