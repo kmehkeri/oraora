@@ -2,7 +2,7 @@ module Oraora
   class App
     class InvalidCommand < StandardError; end
 
-    SQL_KEYWORDS = %w(select insert update delete merge create drop alter purge analyze commit rollback where add set)
+    SQL_KEYWORDS = %w(select insert update delete merge create drop alter purge analyze commit rollback where add set grant)
     ORAORA_KEYWORDS = %w(c cd l ls d x exit su sudo - -- --- .)
 
     def initialize(credentials, role, logger, context = nil)
@@ -25,7 +25,7 @@ module Oraora
       else
         # Main loop
         buffer = ''
-        while (!@terminate && line = Readline.readline(@context.prompt + (buffer == '' ? ' $ ' : ' % '))) do
+        while !@terminate && line = Readline.readline(@context.prompt + ' ' + (buffer != '' ? '%' : (@role== :SYSDBA ? '#' : '$')) + ' ') do
           line.strip!
           Readline::HISTORY << line if line != '' # Manually add to history to avoid empty lines
           buffer += (buffer == '' ? '' : "\n") + line
@@ -111,7 +111,7 @@ module Oraora
           @logger.debug "List for #{work_context.level || 'database'}"
           @oci.find(work_context).list(filter)
 
-        when 'd'
+        when 'd', 'desc', 'describe'
           @logger.debug "Describe"
           work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
           @logger.debug "Describe for #{work_context.level || 'database'}"
@@ -162,7 +162,7 @@ module Oraora
       new_context = @context.dup
       nodes = path.split(/[\.\/]/).collect(&:upcase) rescue []
       return new_context.root if nodes.empty?
-      level = nodes[0] == "" ? nil : new_context.level
+      level = nodes[0] == '' ? nil : new_context.level
 
       nodes.each_with_index do |node, i|
         case
@@ -174,10 +174,14 @@ module Oraora
           else
             raise Context::InvalidKey if node !~ /^[a-zA-Z0-9_\$]{,30}$/
             case new_context.level
-              when nil then @meta.validate_schema(node) && new_context.traverse(schema: node)
-              when :schema then (object_type = @meta.object_type(new_context.schema, node)) && new_context.traverse(object: node, object_type: object_type)
-              when :object then @meta.validate_column(new_context.schema, new_context.object, node) && new_context.traverse(column: node)
-              #TODO: Subprograms
+              when nil
+                @oci.find(new_context.traverse(schema: node))
+              when :schema
+                o = @oci.find_object(new_context.schema, node)
+                new_context.traverse(object: node, object_type: o.type)
+              when :object
+                @oci.find(new_context.traverse(column: node))
+                #TODO: Subprograms
               else raise Context::InvalidKey
             end
         end

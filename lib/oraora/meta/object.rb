@@ -1,22 +1,25 @@
 module Oraora
   class Meta
     class Object
-      def initialize(schema, name)
+      attr_reader :type
+
+      def initialize(schema, name, type = nil)
         @schema = schema
         @name = name
+        @type = type
       end
 
       def load_from_oci(oci)
-        @id, @type = oci.select_one("SELECT object_id, object_type FROM dba_objects WHERE owner = :schema AND object_name = :name", @schema, @name)
-        @id = @id.to_i
+        @id, @type = oci.select_one("SELECT object_id, object_type FROM dba_objects WHERE owner = :schema AND object_name = :name", @schema, @name) if !@type
+        @id = @id && @id.to_i
         case @type
           when 'TABLE' then Table.from_oci(oci, @schema, @name)
           else self
         end
       end
 
-      def self.from_oci(oci, schema, name)
-        new(schema, name).load_from_oci(oci)
+      def self.from_oci(oci, schema, name, type = nil)
+        new(schema, name, type).load_from_oci(oci)
       end
 
       def describe

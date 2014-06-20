@@ -10,6 +10,7 @@ module Oraora
       subprogram:  [],
     }
     KEYS = HIERARCHY.keys.compact + [:object_type, :subprogram_type]
+    RELATION_OBJECT_TYPES = ['TABLE', 'VIEW', 'MATERIALIZED VIEW']
 
     attr_reader :level, :user, *KEYS
 
@@ -36,7 +37,7 @@ module Oraora
       while(!hash.empty?) do
         key = HIERARCHY[@level].detect { |k| hash[k] } or raise InvalidKey
         case key
-          when :column then raise InvalidKey unless [:table, :view, :mview].include?(@object_type)
+          when :column then raise InvalidKey unless RELATION_OBJECT_TYPES.include?(@object_type)
           when :object then raise InvalidKey unless @object_type = hash.delete(:object_type)
           when :subprogram then raise InvalidKey unless @object_type == :package && @subprogram_type = hash.delete(:subprogram_type)
         end

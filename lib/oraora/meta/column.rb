@@ -1,20 +1,14 @@
 module Oraora
   class Meta
     class Column
-      def initialize(schema, relation, name)
+      CHAR_USED_MAP = { 'B' => 'BYTE', 'C' => 'CHAR' }
+      attr_reader :name
+
+      def initialize(schema, relation, name, attributes = {})
         @schema = schema
         @relation = relation
         @name = name
-      end
-
-      def load_from_oci(oci)
-        @id, @type, @length, @precision, @scale, @char_semantics =
-          oci.select_one("SELECT column_id, data_type, data_length, data_precision, data_scale, char_used FROM dba_tab_columns WHERE owner = :schema AND table_name = :relation AND column_name = :name", @schema, @relation, @name)
-        self
-      end
-
-      def self.from_oci(oci, schema, relation, name)
-        new(schema, relation, name).load_from_oci(oci)
+        attributes.each { |k, v| instance_variable_set("@#{k}".to_sym, v) }
       end
 
       def describe
@@ -23,12 +17,30 @@ module Oraora
           Relation:     #{@relation}
           Name:         #{@name}
           Id:           #{@id}
-          Type:         #{@type}(#{@length}/#{@precision},#{@scale})
+          Type:         #{display_type}
         HERE
       end
 
       def list(filter = nil)
         raise NotApplicable, "Nothing to list for column"
+      end
+
+      def display_type
+        case @type
+          when 'NUMBER'
+            case
+              when !@precision && !@scale then "NUMBER"
+              when !@precision && @scale == 0 then "INTEGER"
+              when @scale == 0 then "NUMBER(#{@precision})"
+              else "NUMBER(#{@precision},#{@scale})"
+            end
+          when 'CHAR', 'NCHAR'
+            @char_length == 1 ? 'CHAR' : "CHAR(#{@char_length} #{@char_used})"
+          when 'VARCHAR', 'VARCHAR2', 'NVARCHAR2'
+            "#{@type}(#{@char_length} #{CHAR_USED_MAP[@char_used]})"
+          else
+            @type
+        end
       end
     end
   end
