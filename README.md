@@ -111,8 +111,8 @@ statements will work:
 Some other examples:
 ```
 ~ $ IDENTIFIED BY oraora;               # implicit 'ALTER USER xxx ...'
-~.SOME_TABLE.COL > WHERE x = 1;         # implicit 'SELECT COL FROM SOME_TABLE ...'
-~.SOME_TABLE.COL > RENAME TO kol;       # implicit 'ALTER TABLE SOME_TABLE RENAME COLUMN col TO kol'
+~.SOME_TABLE.COL $ WHERE x = 1;         # implicit 'SELECT COL FROM SOME_TABLE ...'
+~.SOME_TABLE.COL $ RENAME TO kol;       # implicit 'ALTER TABLE SOME_TABLE RENAME COLUMN col TO kol'
 ```
 
 ### Su / sudo

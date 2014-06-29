@@ -1,8 +1,16 @@
 module Oraora
   module Terminal
+    def self.width
+      HighLine::SystemExtensions.terminal_size[0]
+    end
+
+    def self.height
+      HighLine::SystemExtensions.terminal_size[1]
+    end
+
     def self.puts_grid(items)
       # TODO: Disable terminal size check when not reading from terminal
-      terminal_cols = [HighLine::SystemExtensions.terminal_size[0], 32].max
+      terminal_cols = [width, 32].max
       object_cols = terminal_cols / 32
       # TODO: Determine optimal object_cols
       num_rows = (items.length + object_cols - 1) / object_cols

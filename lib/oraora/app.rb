@@ -2,7 +2,7 @@ module Oraora
   class App
     class InvalidCommand < StandardError; end
 
-    SQL_KEYWORDS = %w(select insert update delete merge create drop alter purge analyze commit rollback where add set grant)
+    SQL_KEYWORDS = %w(select insert update delete merge truncate create drop alter purge analyze commit rollback where add set grant)
     ORAORA_KEYWORDS = %w(c cd l ls d x exit su sudo - -- --- .)
 
     def initialize(credentials, role, logger, context = nil)
@@ -82,7 +82,11 @@ module Oraora
       text = 'c ' + text if text =~ /^\s*(\.|\-+)\s*$/
 
       # Determine first non-comment word of a command
-      text =~ /\A(?:\/\*.*?\*\/\s*|--.*?(?:\n|\Z))*\s*([^[:space:]\*\(\/;]+)?\s*(.*)?/mi
+      text =~ /\A(?:\/\*.*?\*\/\s*|--.*?(?:\n|\Z))*\s*([^[:space:]\*\(\/;]+)?\s*(.*?)(?:[[:space:];]*)\Z/mi
+      #          <------------- 1 --------------->    <--------- 2 -------->-   < 3 >
+      # 1) strip '/* ... */' or '--' style comments from the beginning
+      # 2) first word (any characters not being a space, '(', ';' or '*'), captured into $1
+      # 3) remaining portion of a command, captured into $2
 
       case first_word = $1 && $1.downcase
         # Nothing, gibberish or just comments
@@ -125,11 +129,33 @@ module Oraora
         # SQL
         when *SQL_KEYWORDS
           @logger.debug "SQL: #{text.gsub(/[;\/]\Z/, '')}"
-          cursor = @oci.exec(text.gsub(/[;\/]\Z/, ''))
+          res = @oci.exec(text.gsub(/[;\/]\Z/, ''))
+
           if first_word == 'select'
-            while record = cursor.fetch do
-              puts record.join(', ')
-            end
+            # Column metadata
+            column_names = res.get_col_names
+
+            res.prefetch_rows = 1000
+            begin
+              # Fetch 1000 rows
+              output = []
+              column_lengths = Array.new(column_names.length, 1)
+              while output.length < 1000 && record = res.fetch
+                output << record
+                column_lengths = column_lengths.zip(record.collect { |v| v.to_s.length}).collect(&:max)
+              end
+
+              # Output
+              puts "%-*.*s  " * column_names.length % column_lengths.zip(column_lengths, column_names).flatten
+              puts "%-*s  " * column_names.length % column_lengths.zip(column_lengths.collect { |c| '-' * c }).flatten
+              output.each do |row|
+                puts "%-*s  " * row.length % column_lengths.zip(row).flatten
+              end
+              puts
+            end while record
+
+          else
+            @logger.info "#{res} row(s) affected"
           end
 
         when 'su'
