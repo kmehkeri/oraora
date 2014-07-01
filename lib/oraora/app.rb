@@ -97,12 +97,17 @@ module Oraora
 
         when 'c', 'cd'
           @logger.debug "Switch context"
+          old_schema = @context.schema || @context.user
           if $2 && $2 != ''
             @context = context_for($2[/^\S+/])
           else
             @context.set(schema: @user)
           end
           @logger.debug "New context is #{@context.send(:key_hash)}"
+          if old_schema != (@context.schema || @context.user)
+            @logger.debug "Implicit ALTER SESSION SET CURRENT_SCHEMA = " + (@context.schema || @context.user)
+            @oci.exec("ALTER SESSION SET CURRENT_SCHEMA = " + (@context.schema || @context.user))
+          end
 
         when 'l', 'ls'
           @logger.debug "List"
@@ -113,13 +118,13 @@ module Oraora
           @logger.debug "Path: #{path}, Filter: #{filter}"
           work_context = path && path != '' ? context_for(path[/^\S+/]) : @context
           @logger.debug "List for #{work_context.level || 'database'}"
-          @oci.find(work_context).list(filter)
+          @meta.find(work_context).list(filter)
 
         when 'd', 'desc', 'describe'
           @logger.debug "Describe"
           work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
           @logger.debug "Describe for #{work_context.level || 'database'}"
-          @oci.find(work_context).describe
+          @meta.find(work_context).describe
 
         # Exit
         when 'x', 'exit'
@@ -201,12 +206,12 @@ module Oraora
             raise Context::InvalidKey if node !~ /^[a-zA-Z0-9_\$]{,30}$/
             case new_context.level
               when nil
-                @oci.find(new_context.traverse(schema: node))
+                @meta.find(new_context.traverse(schema: node))
               when :schema
-                o = @oci.find_object(new_context.schema, node)
+                o = @meta.find_object(new_context.schema, node)
                 new_context.traverse(object: node, object_type: o.type)
               when :object
-                @oci.find(new_context.traverse(column: node))
+                @meta.find(new_context.traverse(column: node))
                 #TODO: Subprograms
               else raise Context::InvalidKey
             end

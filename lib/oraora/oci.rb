@@ -52,27 +52,5 @@ module Oraora
       exec(sql, *bindvars) { |row| result << row.first }
       result
     end
-
-    # Returns a node identified by context
-    def find(context)
-      case context.level
-        when nil
-          Meta::Database.from_oci(self)
-        when :schema
-          Meta::Schema.from_oci(self, context.schema)
-        when :object
-          Meta::Object.from_oci(self, context.schema, context.object, context.object_type)
-        when :column
-          col = context.column
-          find(context.dup.up).columns(col)
-        #when :subprogram
-        #  Meta::Subprogram.from_oci(self, context.schema, context.object, context.subprogram)
-      end
-    end
-
-    # Returns a node identified by name
-    def find_object(schema, name)
-      Meta::Object.from_oci(self, schema, name)
-    end
   end
 end

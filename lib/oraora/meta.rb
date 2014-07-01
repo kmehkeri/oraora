@@ -4,38 +4,29 @@ module Oraora
     class NotExists < StandardError; end
     class NotApplicable < StandardError; end
 
+    # Initializes with OCI
     def initialize(oci)
       @oci = oci
     end
 
-    def validate_schema(schema, cache = nil)
-      raise NotExists unless @oci.select_one('SELECT max(1) FROM all_users WHERE username = :username', schema)[0] == 1
-      true
-    end
-
-    def object_type(schema, cache = nil)
-      type = @oci.select_one("SELECT max(object_type) FROM all_objects WHERE owner = :schema AND object_name = :object AND object_type NOT IN ('PACKAGE BODY')", schema, object)[0]
-      raise NotExists if !type
-      type.downcase.gsub(' ', '_').to_sym
-    end
-
-    def validate_column(schema, relation, column, cache = nil)
-      raise NotExists unless @oci.select_one('SELECT max(1) FROM all_tab_columns WHERE owner = :schema AND table_name = :relation AND column_name = :col', schema, relation, column)[0] == 1
-      true
-    end
-
-    def database
-      @database ||= Database.new.refresh(@oci)
-    end
-
-    def find(context, refresh = false)
-      if context.level == nil
-        database
-      elsif context.schema
-        schema = database.schemas[context.schema]
-        schema.refresh(@oci)
-        context.level == :schema ? schema : schema.find(context)
+    # Returns a node identified by context
+    def find(context)
+      case context.level
+        when nil
+          Meta::Database.from_oci(@oci)
+        when :schema
+          Meta::Schema.from_oci(@oci, context.schema)
+        when :object
+          Meta::Object.from_oci(@oci, context.schema, context.object, context.object_type)
+        when :column
+          col = context.column
+          find(context.dup.up).columns(col)
       end
+    end
+
+    # Returns an object node identified by name
+    def find_object(schema, name)
+      Meta::Object.from_oci(@oci, schema, name)
     end
   end
 end
