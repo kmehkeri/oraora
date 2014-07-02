@@ -2,7 +2,13 @@ module Oraora
   class App
     class InvalidCommand < StandardError; end
 
-    SQL_KEYWORDS = %w(select insert update delete merge truncate create drop alter purge analyze commit rollback where add set grant)
+    SQL_KEYWORDS = %w(
+      select from partition where connect group model union intersect minus order
+      insert update set delete merge
+      truncate add drop create rename alter purge grant revoke
+      compile analyze commit rollback
+      identified profile account quota default temporary
+    )
     ORAORA_KEYWORDS = %w(c cd l ls d x exit su sudo - -- --- .)
 
     def initialize(credentials, role, logger, context = nil)
@@ -133,10 +139,13 @@ module Oraora
 
         # SQL
         when *SQL_KEYWORDS
-          @logger.debug "SQL: #{text.gsub(/[;\/]\Z/, '')}"
-          res = @oci.exec(text.gsub(/[;\/]\Z/, ''))
+          raw_sql = text.gsub(/[;\/]\Z/, '')
+          @logger.debug "SQL: #{raw_sql}"
+          context_aware_sql = Awareness.enrich(raw_sql, @context)
+          @logger.debug "SQL (context-aware): #{context_aware_sql}" if context_aware_sql != raw_sql
+          res = @oci.exec(context_aware_sql)
 
-          if first_word == 'select'
+          if res.is_a? OCI8::Cursor
             # Column metadata
             column_names = res.get_col_names
 
@@ -158,6 +167,8 @@ module Oraora
               end
               puts
             end while record
+
+            @logger.info "#{res.row_count} row(s) selected"
 
           else
             @logger.info "#{res} row(s) affected"

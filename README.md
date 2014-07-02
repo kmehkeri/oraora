@@ -102,10 +102,10 @@ for execution.
 When in specific context, you can omit some obvious parts of SQL statements. For example, in context of a table following
 statements will work:
 ```
-~.SOME_TABLE $ SELECT *;                # implicit '... FROM SOME_TABLE'
+~.SOME_TABLE $ SELECT;                  # implicit '... FROM SOME_TABLE'
 ~.SOME_TABLE $ WHERE col = 1;           # implicit 'SELECT * FROM SOME_TABLE ...'
 ~.SOME_TABLE $ SET col = 2;             # implicit 'UPDATE SOME_TABLE ...'
-~.SOME_TABLE $ ADD COLUMN x INTEGER;    # implicit 'ALTER TABLE SOME_TABLE ...'
+~.SOME_TABLE $ ADD x INTEGER;           # implicit 'ALTER TABLE SOME_TABLE ...'
 ```
 
 Some other examples:
