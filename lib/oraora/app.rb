@@ -2,14 +2,21 @@ module Oraora
   class App
     class InvalidCommand < StandardError; end
 
-    SQL_KEYWORDS = %w(
-      select from partition where connect group model union intersect minus order
-      insert update set delete merge
-      truncate add drop create rename alter purge grant revoke
-      compile analyze commit rollback
-      identified profile account quota default temporary
+    SQL_INITIAL_KEYWORDS = %w(
+      SELECT FROM PARTITION WHERE CONNECT GROUP MODEL UNION INTERSECT MINUS ORDER
+      INSERT UPDATE SET DELETE MERGE
+      TRUNCATE ADD DROP CREATE RENAME ALTER PURGE GRANT REVOKE
+      COMPILE ANALYZE COMMIT ROLLBACK
+      IDENTIFIED PROFILE ACCOUNT QUOTA DEFAULT TEMPORARY
+    )
+    SQL_KEYWORDS = SQL_INITIAL_KEYWORDS + %w(
+      TABLE VIEW MATERIALIZED COLUMN PROCEDURE FUNCTION PACKAGE TYPE BODY
+      USER SESSION SCHEMA SYSTEM DATABASE
+      REPLACE AND OR
     )
     ORAORA_KEYWORDS = %w(c cd l ls d x exit su sudo - -- --- .)
+
+    attr_reader :meta, :context
 
     def initialize(credentials, role, logger, context = nil)
       @credentials = credentials
@@ -24,7 +31,9 @@ module Oraora
       @logger.debug "Connecting: #{@credentials}" + (@role ? " as #{@role}" : '')
       logon
 
-      # TODO: Add readline completion
+      # Readline tab completion
+      Readline.completion_append_character = ''
+      Readline.completion_proc = Completion.new(self).comp_proc
 
       if command
         process(command)
@@ -53,8 +62,10 @@ module Oraora
       end
 
     rescue Interrupt
-      @logger.warn "Interrupt"
-      terminate
+      if Readline.line_buffer == ''
+        @logger.warn "Interrupt"
+        terminate
+      end
     end
 
     # Logon to the server
@@ -105,7 +116,7 @@ module Oraora
           @logger.debug "Switch context"
           old_schema = @context.schema || @context.user
           if $2 && $2 != ''
-            @context = context_for($2[/^\S+/])
+            @context = context_for(@context, $2[/^\S+/])
           else
             @context.set(schema: @user)
           end
@@ -122,15 +133,15 @@ module Oraora
           path = path.chomp(filter).chomp('.').chomp('/')
           filter.upcase! if filter
           @logger.debug "Path: #{path}, Filter: #{filter}"
-          work_context = path && path != '' ? context_for(path[/^\S+/]) : @context
+          work_context = context_for(@context, path[/^\S+/])
           @logger.debug "List for #{work_context.level || 'database'}"
-          @meta.find(work_context).list(filter)
+          Terminal.puts_grid(@meta.find(work_context).list(filter))
 
         when 'd', 'desc', 'describe'
           @logger.debug "Describe"
           work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
           @logger.debug "Describe for #{work_context.level || 'database'}"
-          @meta.find(work_context).describe
+          puts(@meta.find(work_context).describe)
 
         # Exit
         when 'x', 'exit'
@@ -138,7 +149,7 @@ module Oraora
           terminate
 
         # SQL
-        when *SQL_KEYWORDS
+        when *SQL_INITIAL_KEYWORDS
           raw_sql = text.gsub(/[;\/]\Z/, '')
           @logger.debug "SQL: #{raw_sql}"
           context_aware_sql = Awareness.enrich(raw_sql, @context)
@@ -199,9 +210,9 @@ module Oraora
     end
 
     # Returns new context relative to current one, traversing given path
-    def context_for(path, default = nil)
-      return default.dup if !path || path == ''
-      new_context = @context.dup
+    def context_for(context, path)
+      return context.dup if !path || path == ''
+      new_context = context.dup
       nodes = path.split(/[\.\/]/).collect(&:upcase) rescue []
       return new_context.root if nodes.empty?
       level = nodes[0] == '' ? nil : new_context.level

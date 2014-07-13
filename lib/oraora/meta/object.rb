@@ -23,7 +23,7 @@ module Oraora
       end
 
       def describe
-        puts <<-HERE.reset_indentation
+        <<-HERE.reset_indentation
           Schema:       #{@schema}
           Name:         #{@name}
           Id:           #{@id}

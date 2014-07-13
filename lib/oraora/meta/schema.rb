@@ -17,7 +17,7 @@ module Oraora
       end
 
       def describe
-        puts <<-HERE.reset_indentation
+        <<-HERE.reset_indentation
           Schema:       #{@name}
           Id:           #{@id}
           Status:       #{@status}
@@ -28,7 +28,7 @@ module Oraora
       def list(filter = nil)
         objects = @objects.collect(&:first)
         objects.select! { |o| o =~ /^#{Regexp.escape(filter).gsub('\*', '.*').gsub('\?', '.')}$/ } if filter
-        Terminal.puts_grid(objects)
+        objects
       end
     end
   end

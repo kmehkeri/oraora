@@ -12,7 +12,7 @@ module Oraora
       end
 
       def describe
-        puts <<-HERE.reset_indentation
+        <<-HERE.reset_indentation
           Database:     #{@name}
           Created:      #{@created}
         HERE
@@ -20,7 +20,7 @@ module Oraora
 
       def list(filter = nil)
         schemas = @schemas.select! { |o| o =~ /^#{Regexp.escape(filter).gsub('\*', '.*').gsub('\?', '.')}$/ } if filter
-        Terminal.puts_grid(schemas || @schemas)
+        schemas || @schemas
       end
     end
   end

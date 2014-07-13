@@ -21,7 +21,7 @@ module Oraora
       end
 
       def describe
-        puts <<-HERE.reset_indentation
+        <<-HERE.reset_indentation
           Schema:       #{@schema}
           Name:         #{@name}
           Partitioned:  #{@partitioned}
@@ -31,7 +31,7 @@ module Oraora
       def list(filter = nil)
         columns = @columns.keys
         columns.select! { |c| c =~ /^#{Regexp.escape(filter).gsub('\*', '.*').gsub('\?', '.')}$/ } if filter
-        Terminal.puts_grid(columns || @columns)
+        columns || @columns
       end
 
       def columns(column)
