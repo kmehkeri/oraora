@@ -22,7 +22,7 @@ module Oraora
         new(schema, name, type).load_from_oci(oci)
       end
 
-      def describe
+      def describe(options = {})
         <<-HERE.reset_indentation
           Schema:       #{@schema}
           Name:         #{@name}
@@ -31,7 +31,7 @@ module Oraora
         HERE
       end
 
-      def list(filter = nil)
+      def list(options = {}, filter = nil)
         raise NotApplicable, "Cannot list for this object"
       end
     end

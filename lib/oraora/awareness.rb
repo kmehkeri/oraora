@@ -32,6 +32,7 @@ module Oraora
 
       # Relation
       Entry.new(:object, ['TABLE', 'VIEW', 'MATERIALIZED VIEW'],  %w(SELECT ;),         'SELECT * FROM $object'),
+      Entry.new(:object, ['TABLE', 'VIEW', 'MATERIALIZED VIEW'],  %w(COUNT ),           'SELECT count(*) FROM $object'),
       *%w(PARTITION WHERE CONNECT GROUP MODEL UNION INTERSECT MINUS ORDER).collect do |keyword|
         Entry.new(:object, ['TABLE', 'VIEW', 'MATERIALIZED VIEW'],  [keyword],            "SELECT * FROM $object #{keyword}")
       end,
@@ -56,18 +57,20 @@ module Oraora
           next
         end
         map << token.upcase
-        puts "[AWARENESS] #{token}, map: #{map}"
+        #puts "[AWARENESS] #{token}, map: #{map}"
         match = ENRICH_MAP.detect do |entry|
           context.send(entry.key) && (!entry.object_types || [*entry.object_types].include?(context.object_type)) && map == entry.map
         end
 
         if match
-          puts "[AWARENESS] Map match: #{match.sql}"
+          #puts "[AWARENESS] Map match: #{match.sql}"
           sql =~ /^#{tokens.join.chomp(';')}(.*)$/mi
           last_part = $1
           first_part = eval '"' + match.sql.gsub(/\$(\w+)+/, '#{context.send(:\1)}') + '"'
           return first_part + last_part
         end
+
+        break if tokens.length >= 2
       end
       sql
     end

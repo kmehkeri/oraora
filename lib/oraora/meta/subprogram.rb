@@ -19,7 +19,7 @@ module Oraora
         new(schema, package, name).load_from_oci(oci)
       end
 
-      def describe
+      def describe(options = {})
         <<-HERE.reset_indentation
           Schema:       #{@schema}
           Package:      #{@package}
@@ -28,7 +28,7 @@ module Oraora
         HERE
       end
 
-      def list(filter = nil)
+      def list(options = {}, filter = nil)
         raise NotApplicable, "Nothing to list for subprogram"
       end
     end

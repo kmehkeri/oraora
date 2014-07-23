@@ -11,14 +11,14 @@ module Oraora
         new.load_from_oci(oci)
       end
 
-      def describe
+      def describe(options = {})
         <<-HERE.reset_indentation
           Database:     #{@name}
           Created:      #{@created}
         HERE
       end
 
-      def list(filter = nil)
+      def list(options = {}, filter = nil)
         schemas = @schemas.select! { |o| o =~ /^#{Regexp.escape(filter).gsub('\*', '.*').gsub('\?', '.')}$/ } if filter
         schemas || @schemas
       end

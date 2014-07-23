@@ -20,7 +20,7 @@ module Oraora
         self
       end
 
-      def describe
+      def describe(options = {})
         <<-HERE.reset_indentation
           Schema:       #{@schema}
           Name:         #{@name}
@@ -28,7 +28,7 @@ module Oraora
         HERE
       end
 
-      def list(filter = nil)
+      def list(options = {}, filter = nil)
         columns = @columns.keys
         columns.select! { |c| c =~ /^#{Regexp.escape(filter).gsub('\*', '.*').gsub('\?', '.')}$/ } if filter
         columns || @columns

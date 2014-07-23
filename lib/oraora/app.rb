@@ -3,7 +3,7 @@ module Oraora
     class InvalidCommand < StandardError; end
 
     SQL_INITIAL_KEYWORDS = %w(
-      SELECT FROM PARTITION WHERE CONNECT GROUP MODEL UNION INTERSECT MINUS ORDER
+      SELECT COUNT FROM PARTITION WHERE CONNECT GROUP MODEL UNION INTERSECT MINUS ORDER
       INSERT UPDATE SET DELETE MERGE
       TRUNCATE ADD DROP CREATE RENAME ALTER PURGE GRANT REVOKE
       COMPILE ANALYZE COMMIT ROLLBACK
@@ -49,7 +49,7 @@ module Oraora
           # * This is first line of the buffer and is a Oraora command
           # * Entire buffer is a comment
           # * Line is '/' or ends with ';'
-          if (buffer == line && (line =~ /^(#{ORAORA_KEYWORDS.join('|')})($|\s+)/ || line =~ /^\s*$/)) || line == '/' || line =~ /;$/ || buffer =~ /\A\s*--/ || buffer =~ /\A\s*\/\*.*\*\/\s*\Z/m
+          if (buffer == line && (line =~ /^(#{ORAORA_KEYWORDS.collect { |k| Regexp.escape(k) }.join('|')})($|\s+)/i || line =~ /^\s*$/)) || line == '/' || line =~ /;$/ || buffer =~ /\A\s*--/ || buffer =~ /\A\s*\/\*.*\*\/\s*\Z/m
             process(buffer)
             buffer = ''
           end
@@ -105,14 +105,14 @@ module Oraora
       # 2) first word (any characters not being a space, '(', ';' or '*'), captured into $1
       # 3) remaining portion of a command, captured into $2
 
-      case first_word = $1 && $1.downcase
+      case first_word = $1 && $1.upcase
         # Nothing, gibberish or just comments
         when nil
           if $2 && $2 != ''
             raise InvalidCommand, "Invalid command: #{$2}"
           end
 
-        when 'c', 'cd'
+        when 'C', 'CD'
           @logger.debug "Switch context"
           old_schema = @context.schema || @context.user
           if $2 && $2 != ''
@@ -126,7 +126,7 @@ module Oraora
             @oci.exec("ALTER SESSION SET CURRENT_SCHEMA = " + (@context.schema || @context.user))
           end
 
-        when 'l', 'ls'
+        when 'L', 'LS'
           @logger.debug "List"
           path = $2
           filter = $2[/[^\.\/]*(\*|\?)[^\.\/]*$/]
@@ -135,16 +135,40 @@ module Oraora
           @logger.debug "Path: #{path}, Filter: #{filter}"
           work_context = context_for(@context, path[/^\S+/])
           @logger.debug "List for #{work_context.level || 'database'}"
-          Terminal.puts_grid(@meta.find(work_context).list(filter))
+          Terminal.puts_grid(@meta.find(work_context).list({}, filter))
 
-        when 'd', 'desc', 'describe'
+        when 'D', 'DESC', 'DESCRIBE'
           @logger.debug "Describe"
-          work_context = $2 && $2 != '' ? context_for($2[/^\S+/]) : @context
+          args = $2.split(/\s+/)
+          @logger.debug args.to_s
+          options = {}
+          if args.first == '-p'
+            @logger.debug "Profiling enabled"
+            options = { profile: true }
+            args.shift
+          end
+          work_context = context_for(@context, args.first)
           @logger.debug "Describe for #{work_context.level || 'database'}"
-          puts(@meta.find(work_context).describe)
+          puts(@meta.find(work_context).describe(options))
+
+          # TODO: For refactoring
+          if work_context.level == :column && options[:profile]
+            prof = @oci.exec <<-SQL
+              SELECT value, cnt, rank
+                FROM (SELECT value, cnt, row_number() over (order by cnt desc) AS rank
+                        FROM (SELECT #{work_context.column} AS value, count(*) AS cnt
+                                FROM #{work_context.object}
+                               GROUP BY #{work_context.column}
+                             )
+                     )
+                WHERE rank <= 20 OR value IS NULL
+                ORDER BY rank
+            SQL
+            Terminal.puts_cursor(prof)
+          end
 
         # Exit
-        when 'x', 'exit'
+        when 'X', 'EXIT'
           @logger.debug "Exiting on exit command"
           terminate
 
@@ -157,39 +181,17 @@ module Oraora
           res = @oci.exec(context_aware_sql)
 
           if res.is_a? OCI8::Cursor
-            # Column metadata
-            column_names = res.get_col_names
-
-            res.prefetch_rows = 1000
-            begin
-              # Fetch 1000 rows
-              output = []
-              column_lengths = Array.new(column_names.length, 1)
-              while output.length < 1000 && record = res.fetch
-                output << record
-                column_lengths = column_lengths.zip(record.collect { |v| v.to_s.length}).collect(&:max)
-              end
-
-              # Output
-              puts "%-*.*s  " * column_names.length % column_lengths.zip(column_lengths, column_names).flatten
-              puts "%-*s  " * column_names.length % column_lengths.zip(column_lengths.collect { |c| '-' * c }).flatten
-              output.each do |row|
-                puts "%-*s  " * row.length % column_lengths.zip(row).flatten
-              end
-              puts
-            end while record
-
+            Terminal.puts_cursor(res)
             @logger.info "#{res.row_count} row(s) selected"
-
           else
             @logger.info "#{res} row(s) affected"
           end
 
-        when 'su'
+        when 'SU'
           @logger.debug "Command type: su"
           su
 
-        when 'sudo'
+        when 'SUDO'
           @logger.debug "Command type: sudo (#{$2})"
           raise InvalidCommand, "Command required for sudo" if $2.strip == ''
           su($2)

@@ -11,7 +11,7 @@ module Oraora
         attributes.each { |k, v| instance_variable_set("@#{k}".to_sym, v) }
       end
 
-      def describe
+      def describe(options = {})
         <<-HERE.reset_indentation
           Schema:       #{@schema}
           Relation:     #{@relation}
@@ -21,7 +21,7 @@ module Oraora
         HERE
       end
 
-      def list(filter = nil)
+      def list(options = {}, filter = nil)
         raise NotApplicable, "Nothing to list for column"
       end
 

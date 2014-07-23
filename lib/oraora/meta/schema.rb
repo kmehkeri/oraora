@@ -16,7 +16,7 @@ module Oraora
         new(name).load_from_oci(oci)
       end
 
-      def describe
+      def describe(options = {})
         <<-HERE.reset_indentation
           Schema:       #{@name}
           Id:           #{@id}
@@ -25,7 +25,7 @@ module Oraora
         HERE
       end
 
-      def list(filter = nil)
+      def list(options = {}, filter = nil)
         objects = @objects.collect(&:first)
         objects.select! { |o| o =~ /^#{Regexp.escape(filter).gsub('\*', '.*').gsub('\?', '.')}$/ } if filter
         objects
