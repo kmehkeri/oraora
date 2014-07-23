@@ -20,9 +20,8 @@ module Oraora
 
     def initialize(credentials, role, logger, context = nil)
       @credentials = credentials
-      @user, @database, @role = credentials.user.upcase, credentials.database, (role ? role.upcase.to_sym : nil)
+      @user, @database, @role = (credentials.user ? credentials.user.upcase : nil), credentials.database, (role ? role.upcase.to_sym : nil)
       @logger = logger
-      @context = context || Context.new(@user, schema: @user)
     end
 
     # Run the application with given credentials
@@ -30,6 +29,8 @@ module Oraora
       # Connect to Oracle
       @logger.debug "Connecting: #{@credentials}" + (@role ? " as #{@role}" : '')
       logon
+      @user ||= @oci.username
+      @context = context || Context.new(@user, schema: @user)
 
       # Readline tab completion
       Readline.completion_append_character = ''
