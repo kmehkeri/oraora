@@ -1,6 +1,6 @@
 module Oraora
   class Meta
-    class Column
+    class Subprogram
       attr_reader :id, :schema, :package, :name
 
       def initialize(schema, package, name)

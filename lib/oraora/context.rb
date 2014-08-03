@@ -75,10 +75,16 @@ module Oraora
       p
     end
 
-    private
-
     def key_hash
       Hash[ KEYS.collect { |key| [key, instance_variable_get("@#{key}")] } ].delete_if { |k, v| v.nil? }
+    end
+
+    def hash
+      key_hash.hash
+    end
+
+    def eql?(other)
+      key_hash == other.key_hash
     end
   end
 end

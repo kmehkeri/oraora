@@ -7,21 +7,23 @@ module Oraora
     # Initializes with OCI
     def initialize(oci)
       @oci = oci
+      @cache = {}
     end
 
     # Returns a node identified by context
     def find(context)
-      case context.level
+      node = case context.level
         when nil
-          Meta::Database.from_oci(@oci)
+          @cache[context] || Meta::Database.from_oci(@oci)
         when :schema
-          Meta::Schema.from_oci(@oci, context.schema)
+          @cache[context] || Meta::Schema.from_oci(@oci, context.schema)
         when :object
-          Meta::Object.from_oci(@oci, context.schema, context.object, context.object_type)
+          @cache[context] || Meta::Object.from_oci(@oci, context.schema, context.object, context.object_type)
         when :column
-          col = context.column
-          find(context.dup.up).columns(col)
+          (@cache[context] || find(context.dup.up)).columns(context.column)
       end
+      @cache[context] = node if node
+      node
     end
 
     # Returns an object node identified by name
