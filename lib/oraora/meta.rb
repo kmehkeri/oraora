@@ -13,16 +13,16 @@ module Oraora
     # Returns a node identified by context
     def find(context)
       node = case context.level
-        when nil
-          @cache[context] || Meta::Database.from_oci(@oci)
-        when :schema
-          @cache[context] || Meta::Schema.from_oci(@oci, context.schema)
-        when :object
-          @cache[context] || Meta::Object.from_oci(@oci, context.schema, context.object, context.object_type)
-        when :column
-          (@cache[context] || find(context.dup.up)).columns(context.column)
-      end
-      @cache[context] = node if node
+               when nil
+                 @cache[context] || Meta::Database.from_oci(@oci)
+               when :schema
+                 @cache[context] || Meta::Schema.from_oci(@oci, context.schema)
+               when :object
+                 @cache[context] || Meta::Object.from_oci(@oci, context.schema, context.object, context.object_type)
+               when :column
+                 find(context.dup.up).columns(context.column)
+             end
+      @cache[context] = node if node && context.level != :column
       node
     end
 

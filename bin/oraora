@@ -18,9 +18,9 @@ begin
   end.parse!
 
   # Logger
-  logger = Logger.new(STDOUT)
-  logger.level = options[:log_level] || Logger::WARN
-  logger.formatter = proc { |severity, datetime, progname, msg| "[#{severity}] #{msg}\n" }
+  logger = Oraora::Logger.new(STDOUT, options[:log_level])
+  #logger.level = options[:log_level] || Logger::WARN
+  #logger.formatter = proc { |severity, datetime, progname, msg| "[#{severity}] #{msg}\n" }
 
   # Read passfile
     if File.file?(passfile = ENV['HOME'] + '/.orapass')

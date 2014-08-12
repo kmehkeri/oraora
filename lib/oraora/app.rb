@@ -41,7 +41,7 @@ module Oraora
       else
         # Main loop
         buffer = ''
-        while !@terminate && line = Readline.readline(@context.prompt + ' ' + (buffer != '' ? '%' : (@role== :SYSDBA ? '#' : '$')) + ' ') do
+        while !@terminate && line = Readline.readline((@context.prompt + ' ' + (buffer != '' ? '%' : (@role== :SYSDBA ? '#' : '$')) + ' ').green.bold) do
           line.strip!
           Readline::HISTORY << line if line != '' # Manually add to history to avoid empty lines
           buffer += (buffer == '' ? '' : "\n") + line
@@ -165,6 +165,7 @@ module Oraora
                 WHERE rank <= 20 OR value IS NULL
                 ORDER BY rank
             SQL
+            puts ""
             Terminal.puts_cursor(prof)
           end
 
