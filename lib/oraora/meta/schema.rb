@@ -6,9 +6,13 @@ module Oraora
       end
 
       def load_from_oci(oci)
-        @id, @status, @created = oci.select_one("SELECT user_id, account_status, created FROM dba_users WHERE username = :name", @name)
+        @id, @created = oci.select_one("SELECT user_id, created FROM all_users WHERE username = :name", @name)
+        raise NotExists if !@id
         @id = @id.to_i
-        @objects = oci.pluck("SELECT object_name, object_type FROM dba_objects WHERE owner = :name ORDER BY object_name", @name)
+        @objects = oci.pluck("SELECT object_name, min(object_type) object_type FROM all_objects
+                               WHERE owner = :name
+                                 AND object_type IN ('TABLE', 'VIEW', 'MATERIALIZED VIEW', 'SEQUENCE')
+                               GROUP BY object_name", @name)
         self
       end
 
@@ -18,9 +22,8 @@ module Oraora
 
       def describe(options = {})
         <<-HERE.reset_indentation
-          Schema:       #{@name}
+          Schema #{@name}
           Id:           #{@id}
-          Status:       #{@status}
           Created:      #{@created}
         HERE
       end

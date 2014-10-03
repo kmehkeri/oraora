@@ -131,7 +131,8 @@ module Oraora
           @logger.debug "List"
           path = $2
           filter = $2[/[^\.\/]*(\*|\?)[^\.\/]*$/]
-          path = path.chomp(filter).chomp('.').chomp('/')
+          path = path.chomp(filter)
+          path = path.chomp('.').chomp('/') unless path =~ /[\.\/]/
           filter.upcase! if filter
           @logger.debug "Path: #{path}, Filter: #{filter}"
           work_context = context_for(@context, path[/^\S+/])

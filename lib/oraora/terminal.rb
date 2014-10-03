@@ -10,7 +10,7 @@ module Oraora
 
     def self.puts_grid(items)
       # TODO: Disable terminal size check when not reading from terminal
-      terminal_cols = [width, 32].max
+      terminal_cols = [width || 0, 32].max
       object_cols = terminal_cols / 32
       # TODO: Determine optimal object_cols
       num_rows = (items.length + object_cols - 1) / object_cols

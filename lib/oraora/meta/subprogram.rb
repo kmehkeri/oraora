@@ -11,7 +11,7 @@ module Oraora
 
       def load_from_oci(oci)
         @id =
-            oci.select_one("SELECT subprogram_id FROM dba_procedues WHERE owner = :schema AND object_name = :package AND procedure_name = :name", @schema, @package, @name)
+            oci.select_one("SELECT subprogram_id FROM all_procedues WHERE owner = :schema AND object_name = :package AND procedure_name = :name", @schema, @package, @name)
         self
       end
 

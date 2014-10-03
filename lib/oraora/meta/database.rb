@@ -3,7 +3,7 @@ module Oraora
     class Database
       def load_from_oci(oci)
         @name, @created = oci.select_one("SELECT name, created FROM v$database")
-        @schemas = oci.pluck_one("SELECT username FROM dba_users ORDER BY username")
+        @schemas = oci.pluck_one("SELECT username FROM all_users ORDER BY username")
         self
       end
 
@@ -13,7 +13,7 @@ module Oraora
 
       def describe(options = {})
         <<-HERE.reset_indentation
-          Database:     #{@name}
+          Database #{@name}
           Created:      #{@created}
         HERE
       end

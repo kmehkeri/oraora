@@ -13,9 +13,7 @@ module Oraora
 
       def describe(options = {})
         <<-HERE.reset_indentation
-          Schema:       #{@schema}
-          Relation:     #{@relation}
-          Name:         #{@name}
+          Column #{@schema}.#{@relation}.#{@name}
           Id:           #{@id}
           Type:         #{display_type}
         HERE

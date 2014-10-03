@@ -10,10 +10,18 @@ module Oraora
       end
 
       def load_from_oci(oci)
-        @id, @type = oci.select_one("SELECT object_id, object_type FROM dba_objects WHERE owner = :schema AND object_name = :name", @schema, @name) if !@type
-        @id = @id && @id.to_i
+        if !@type
+          @id, @type = oci.select_one("SELECT object_id, object_type FROM all_objects
+                                        WHERE owner = :schema AND object_name = :name
+                                        ORDER BY decode(namespace,  19, 0,  99)", @schema, @name) if !@type
+          raise NotExists if !@id
+          @id = @id.to_i
+        end
         case @type
-          when 'TABLE' then Table.from_oci(oci, @schema, @name)
+          when 'TABLE'              then Table.from_oci(oci, @schema, @name)
+          when 'VIEW'               then View.from_oci(oci, @schema, @name)
+          when 'MATERIALIZED VIEW'  then MaterializedView.from_oci(oci, @schema, @name)
+          when 'SEQUENCE'           then Sequence.from_oci(oci, @schema, @name)
           else self
         end
       end
@@ -24,8 +32,7 @@ module Oraora
 
       def describe(options = {})
         <<-HERE.reset_indentation
-          Schema:       #{@schema}
-          Name:         #{@name}
+          Object #{@schema}.#{@name}
           Id:           #{@id}
           Type:         #{@type}
         HERE
