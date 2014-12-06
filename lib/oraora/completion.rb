@@ -1,15 +1,17 @@
 module Oraora
   class Completion
     TEMPLATES = {
-        's'  => 'SELECT',
-        's*' => 'SELECT * FROM',
-        'i'  => 'INSERT',
-        'u'  => 'UPDATE',
-        'd'  => 'DELETE',
-        'a'  => 'ALTER',
-        'c'  => 'CREATE',
-        'cr' => 'CREATE OR REPLACE'
+        's'  => 'SELECT ',
+        's*' => 'SELECT * FROM ',
+        'c*' => 'SELECT COUNT(*) FROM ',
+        'i'  => 'INSERT ',
+        'u'  => 'UPDATE ',
+        'd'  => 'DELETE ',
+        'a'  => 'ALTER ',
+        'c'  => 'CREATE ',
+        'cr' => 'CREATE OR REPLACE '
     }
+
     def initialize(app)
       @app = app
     end

@@ -41,12 +41,14 @@ module Oraora
         end
 
         # Output
-        puts "%-*.*s  " * column_names.length % column_lengths.zip(column_lengths, column_names).flatten
-        puts "%-*s  " * column_names.length % column_lengths.zip(column_lengths.collect { |c| '-' * c }).flatten
-        output.each do |row|
-          puts "%-*s  " * row.length % column_lengths.zip(row).flatten
+        if !output.empty?
+          puts "%-*.*s  " * column_names.length % column_lengths.zip(column_lengths, column_names).flatten
+          puts "%-*s  " * column_names.length % column_lengths.zip(column_lengths.collect { |c| '-' * c }).flatten
+          output.each do |row|
+            puts "%-*s  " * row.length % column_lengths.zip(row).flatten
+          end
+          puts
         end
-        puts
       end while record
     end
   end

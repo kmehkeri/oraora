@@ -2,7 +2,7 @@ module Oraora
   class Meta
     class Column
       CHAR_USED_MAP = { 'B' => 'BYTE', 'C' => 'CHAR' }
-      attr_reader :name
+      attr_reader :name, :id
 
       def initialize(schema, relation, name, attributes = {})
         @schema = schema

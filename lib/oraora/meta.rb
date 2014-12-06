@@ -30,5 +30,10 @@ module Oraora
     def find_object(schema, name)
       Meta::Object.from_oci(@oci, schema, name)
     end
+
+    # Removes all cached metadata
+    def purge_cache
+      @cache = {}
+    end
   end
 end
