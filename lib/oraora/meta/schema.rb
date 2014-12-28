@@ -12,7 +12,8 @@ module Oraora
         @objects = oci.pluck("SELECT object_name, min(object_type) object_type FROM all_objects
                                WHERE owner = :name
                                  AND object_type IN ('TABLE', 'VIEW', 'MATERIALIZED VIEW', 'SEQUENCE')
-                               GROUP BY object_name", @name)
+                               GROUP BY object_name
+                               ORDER BY object_name", @name)
         self
       end
 
@@ -30,6 +31,7 @@ module Oraora
 
       def list(options = {}, filter = nil)
         objects = @objects.collect(&:first)
+        objects.reject! { |o| o =~ /^ISEQ\$\$/ || o =~ /^SYS_/ || o =~ /^ORA_/ } unless options['a']
         objects.select! { |o| o =~ /^#{Regexp.escape(filter).gsub('\*', '.*').gsub('\?', '.')}$/ } if filter
         objects
       end

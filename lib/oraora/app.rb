@@ -14,7 +14,7 @@ module Oraora
       USER SESSION SCHEMA SYSTEM DATABASE
       REPLACE AND OR
     )
-    ORAORA_KEYWORDS = %w(c cd l ls d desc describe x exit su sudo - -- --- . !)
+    ORAORA_KEYWORDS = %w(c cd l ls d desc describe x exit su sudo - -- --- . ! /)
 
     attr_reader :meta, :context
 
@@ -22,6 +22,7 @@ module Oraora
       @credentials = credentials
       @user, @database, @role = (credentials.user ? credentials.user.upcase : nil), credentials.database, (role ? role.upcase.to_sym : nil)
       @logger = logger
+      @context = context
     end
 
     # Run the application with given credentials
@@ -32,7 +33,7 @@ module Oraora
       @logger.debug "Connecting: #{@credentials}" + (@role ? " as #{@role}" : '')
       logon
       @user ||= @oci.username
-      @context = context || Context.new(@user, schema: @user)
+      @context ||= Context.new(@user, schema: @user)
 
       # Readline tab completion
       Readline.completion_append_character = ''
@@ -90,6 +91,8 @@ module Oraora
         terminate
       end
     end
+
+    private
 
     # Logon to the server
     def logon
@@ -166,15 +169,15 @@ module Oraora
 
         when 'L', 'LS'
           @logger.debug "List"
-          path = $2
-          filter = $2[/[^\.\/]*(\*|\?)[^\.\/]*$/]
-          path = path.chomp(filter)
-          path = path.chomp('.').chomp('/') unless path =~ /[\.\/]/
+          options, path = options_for($2)
+          filter = path ? path[/[^\.\/]*(\*|\?)[^\.\/]*$/] : nil
+          path.chomp!(filter) if filter
+          path = path.chomp('.').chomp('/')[/^\S+/] unless path.nil? || path == '.' || path == '/'
           filter.upcase! if filter
           @logger.debug "Path: #{path}, Filter: #{filter}"
-          work_context = context_for(@context, path[/^\S+/])
+          work_context = context_for(@context, path)
           @logger.debug "List for #{work_context.level || 'database'}"
-          Terminal.puts_grid(@meta.find(work_context).list({}, filter))
+          Terminal.puts_grid(@meta.find(work_context).list(options, filter))
 
         when 'D', 'DESC', 'DESCRIBE'
           @logger.debug "Describe"
@@ -247,7 +250,7 @@ module Oraora
       @logger.error e.parse_error_offset ? "#{e.message} at #{e.parse_error_offset}" : e.message
     rescue Interrupt
       @logger.warn "Interrupted by user"
-    rescue StandardError
+    rescue StandardError => e
       @logger.error "Internal error"
       @logger.debug e.backtrace
     end
