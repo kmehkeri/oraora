@@ -73,7 +73,7 @@ module Oraora
 
           rescue Interrupt
             if Time.now - last_interrupt < 2
-              @logger.warn "Exit on CTRL+C, "
+              @logger.warn "Exit on CTRL+C"
               terminate
             else
               @logger.warn "CTRL+C, hit again within 2 seconds to quit"

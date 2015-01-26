@@ -23,6 +23,8 @@ If you don't have Ruby, check one-click installer for Windows or rvm for Linux.
 
 ## Usage
 
+### Connecting to database
+
 Start oraora passing connection string as argument, just like you would connect to SQL*Plus:
 ```
 $ oraora user/password@DB
@@ -94,25 +96,54 @@ Note: `l` is aliased as `ls`. `d` is aliased as `desc` and `describe`.
 
 ### SQL
 
-Any input starting with SQL keyword like `SELECT`, `INSERT`, `CREATE`, ... is recognized as SQL and passed to database
-for execution.
+Any command starting with SQL keyword like `SELECT`, `CREATE`, `ALTER`, etc. is treated as SQL and passed to
+database for execution
+
+```
+~ $ SELECT * FROM dual;
+D
+-
+X
+
+[INFO] 1 row(s) selected
+```
 
 ### Context-aware SQL
 
-When in specific context, you can omit some obvious parts of SQL statements. For example, in context of a table following
-statements will work:
+Within specific context, you can omit some obvious keywords or identifiers at the beginning of SQL statements.
+For example, in context of a table following statements will work:
 ```
-~.SOME_TABLE $ SELECT;                  # implicit '... FROM SOME_TABLE'
-~.SOME_TABLE $ WHERE col = 1;           # implicit 'SELECT * FROM SOME_TABLE ...'
-~.SOME_TABLE $ SET col = 2;             # implicit 'UPDATE SOME_TABLE ...'
-~.SOME_TABLE $ ADD x INTEGER;           # implicit 'ALTER TABLE SOME_TABLE ...'
+~.SOME_TABLE $ SELECT;                  # implicit 'SELECT * FROM SOME_TABLE'
+~.SOME_TABLE $ WHERE col = 1;           # implicit 'SELECT * FROM SOME_TABLE WHERE col = 1'
+~.SOME_TABLE $ SET col = 2;             # implicit 'UPDATE SOME_TABLE SET col = 2'
+~.SOME_TABLE $ ADD x INTEGER;           # implicit 'ALTER TABLE SOME_TABLE ADD x INTEGER'
 ```
 
 Some other examples:
 ```
-~ $ IDENTIFIED BY oraora;               # implicit 'ALTER USER xxx ...'
-~.SOME_TABLE.COL $ WHERE x = 1;         # implicit 'SELECT COL FROM SOME_TABLE ...'
+~ $ IDENTIFIED BY oraora;               # implicit 'ALTER USER xxx IDENTIFIED BY oraora'
+~.SOME_TABLE.COL $ WHERE x = 1;         # implicit 'SELECT COL FROM SOME_TABLE WHERE x = 1'
 ~.SOME_TABLE.COL $ RENAME TO kol;       # implicit 'ALTER TABLE SOME_TABLE RENAME COLUMN col TO kol'
+```
+
+### Tab completion
+
+Oraora has bash-style tab completion - hit `<TAB>` to autocomplete current word with SQL keyword or context. If there are
+multiple possible completions hit `<TAB>` twice to see the list.
+
+Also there are several quick templates defined. For example, type `S*`, then hit `<TAB>` to expand it into
+`SELECT * FROM `. Available templates are as follows:
+
+```
+s  => SELECT
+s* => SELECT * FROM
+c* => SELECT COUNT(*) FROM
+i  => INSERT
+u  => UPDATE
+d  => DELETE
+a  => ALTER
+c  => CREATE
+cr => CREATE OR REPLACE
 ```
 
 ### Su / sudo
@@ -120,15 +151,13 @@ Some other examples:
 `su` and `sudo` allow to switch to SYS session temporarily or execute a single statement as SYS, similarly to their
 unix counterparts. If you don't have SYS password for current connection in orafile, you will be prompted for it.
 ```
-$ oraora foo@DB
-~ $ SELECT * FROM boo.test;
-ERROR: Insufficient privileges
-~ $ sudo GRANT SELECT ON boo.test TO foo;
-Grant succeeded.
-~ $ SELECT * FROM boo.test;
-text
-------------
-Hello world!
+$ oraora test@DB
+~ $ CREATE TABLE test (a INTEGER);
+[ERROR] ORA-01031: insufficient privileges at 0
+~ $ sudo GRANT CREATE TABLE TO test;
+[INFO] 0 row(s) affected
+~ $ CREATE TABLE test (a INTEGER);
+[INFO] 0 row(s) affected
 ```
 
 ## Limitations
