@@ -8,15 +8,19 @@ begin
   # Options
   options = { log_level: Logger::INFO }
 
-  OptionParser.new do |opts|
-    opts.banner = "Usage: oraora [options] connection"
+  option_parser = OptionParser.new do |opts|
+    opts.banner = "Usage: oraora [options] connection_string"
 
     opts.on("-l LEVEL", "--log-level=LEVEL", [:debug, :info, :warn, :error], "Set message verbosity (debug, info, warn, error)") do |l|
       options[:log_level] = Logger.const_get(l.upcase)
     end
 
     opts.on("-h", "--help", "Show this message") { |h| puts opts; exit }
-  end.parse!
+  end
+  option_parser.parse!
+
+  # Check arguments
+  raise ArgumentError if ARGV.length == 0
 
   # Logger
   logger = Oraora::Logger.new(STDOUT, options[:log_level])
@@ -38,6 +42,9 @@ begin
 
 rescue OptionParser::ParseError => e
   puts "Options error: " + e.message
+
+rescue ArgumentError
+  puts option_parser.help
 
 rescue Oraora::Credentials::ParseError => e
   puts "Invalid connection string: " + e.message

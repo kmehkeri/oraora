@@ -1,3 +1,4 @@
+
 module Oraora
   class App
     class InvalidCommand < StandardError; end
@@ -14,7 +15,7 @@ module Oraora
       USER SESSION SCHEMA SYSTEM DATABASE
       REPLACE AND OR
     )
-    ORAORA_KEYWORDS = %w(c cd l ls d desc describe x exit su sudo - -- --- . ! /)
+    ORAORA_KEYWORDS = %w(c cd l ls d desc describe x exit su sudo - -- --- . ! ? /)
 
     attr_reader :meta, :context
 
@@ -32,6 +33,7 @@ module Oraora
       # Connect to Oracle
       @logger.debug "Connecting: #{@credentials}" + (@role ? " as #{@role}" : '')
       logon
+      @logger.info "Oraora v#{VERSION}. Type '?' for quick help"
       @user ||= @oci.username
       @context ||= Context.new(@user, schema: @user)
 
@@ -236,6 +238,10 @@ module Oraora
         when '!'
           @logger.debug "Command type: metadata refresh"
           @meta.purge_cache
+
+        when '?'
+          @logger.debug "Command type: help"
+          puts(HELP)
 
         # Unknown
         else
